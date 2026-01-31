@@ -2,8 +2,10 @@ import 'package:flutter/services.dart';
 import 'package:wns_flutter/src/exception/exception.dart';
 import 'package:wns_flutter/src/model/notification_setting.dart';
 
-class WnsSettingService {
-  final MethodChannel _channel = const MethodChannel('wns_flutter');
+class SettingService {
+  final MethodChannel _channel;
+
+  const SettingService(MethodChannel channel): _channel = channel;
 
   Future<WnsNotificationStatus> getNotificationSettingStatus() async {
     try {

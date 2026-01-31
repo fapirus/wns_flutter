@@ -1,8 +1,3 @@
+export 'package:wns_flutter/src/exception/exception.dart';
 
-import 'wns_flutter_platform_interface.dart';
-
-class WnsFlutter {
-  Future<String?> getPlatformVersion() {
-    return WnsFlutterPlatform.instance.getPlatformVersion();
-  }
-}
+export 'package:wns_flutter/src/windows_notification_service.dart';
