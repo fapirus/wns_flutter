@@ -12,6 +12,9 @@
 #include <flutter/plugin_registrar_windows.h>
 #include <flutter/standard_method_codec.h>
 
+#include <winrt/Windows.Networking.PushNotifications.h>
+#include <winrt/Windows.Foundation.h>
+
 #include <memory>
 #include <sstream>
 
@@ -118,6 +121,66 @@ void WnsFlutterPlugin::HandleMethodCall(
                     flutter::EncodableValue(error_msg.str()));
     } catch (...) {
       result->Error("UNKNOWN_ERROR", "Unknown error getting notification setting.");
+    }
+  }
+  else if (method_call.method_name().compare("getChannelUri") == 0) {
+    // Convert unique_ptr to shared_ptr to capture it in lambda
+    std::shared_ptr<flutter::MethodResult<flutter::EncodableValue>> shared_result = std::move(result);
+    
+    try {
+      winrt::Windows::Foundation::IAsyncOperation<winrt::Windows::Networking::PushNotifications::PushNotificationChannel> op = nullptr;
+      
+      if (!aumid_.empty()) {
+        op = winrt::Windows::Networking::PushNotifications::PushNotificationChannelManager::CreatePushNotificationChannelForApplicationAsync(winrt::to_hstring(aumid_));
+      } else {
+        op = winrt::Windows::Networking::PushNotifications::PushNotificationChannelManager::CreatePushNotificationChannelForApplicationAsync();
+      }
+
+      op.Completed([shared_result](
+        winrt::Windows::Foundation::IAsyncOperation<winrt::Windows::Networking::PushNotifications::PushNotificationChannel> const& asyncInfo,
+        winrt::Windows::Foundation::AsyncStatus const& asyncStatus) {
+          
+          if (asyncStatus == winrt::Windows::Foundation::AsyncStatus::Completed) {
+             try {
+                auto channel = asyncInfo.GetResults();
+                auto uri = winrt::to_string(channel.Uri());
+                auto expiration = channel.ExpirationTime();
+
+                auto expiration_ticks = expiration.time_since_epoch().count(); 
+                const int64_t WINDOWS_TO_UNIX_EPOCH_TICKS = 116444736000000000LL;
+                int64_t unix_ticks = expiration_ticks - WINDOWS_TO_UNIX_EPOCH_TICKS;
+                int64_t expiration_millis = unix_ticks / 10000; 
+                
+                flutter::EncodableMap response;
+                response[flutter::EncodableValue("uri")] = flutter::EncodableValue(uri);
+                response[flutter::EncodableValue("expirationTime")] = flutter::EncodableValue(expiration_millis);
+                
+                shared_result->Success(flutter::EncodableValue(response));
+             } catch (...) {
+                shared_result->Error("CHANNEL_ERROR", "Failed to retrieve channel results.");
+             }
+          } else if (asyncStatus == winrt::Windows::Foundation::AsyncStatus::Error) {
+             std::ostringstream error_msg;
+             error_msg << "Async operation failed with status: " << (int)asyncStatus 
+                       << ". HRESULT: 0x" << std::hex << asyncInfo.ErrorCode().value;
+             
+             if (asyncInfo.ErrorCode().value == (winrt::hresult)0x80070490) {
+               error_msg << " (Hint: Identity not found. Check AUMID or MSIX packaging.)";
+             }
+             
+             shared_result->Error("CHANNEL_ERROR", "Failed to create push notification channel.",
+                                  flutter::EncodableValue(error_msg.str()));
+          } else {
+             shared_result->Error("CHANNEL_ERROR", "Async operation cancelled or not completed.");
+          }
+      });
+    
+    } catch (const hresult_error& ex) {
+      std::ostringstream error_msg;
+      error_msg << "HRESULT: 0x" << std::hex << ex.code() << ": " << winrt::to_string(ex.message());
+      shared_result->Error("CHANNEL_ERROR", "Failed to initiate channel creation.", flutter::EncodableValue(error_msg.str()));
+    } catch (...) {
+       shared_result->Error("UNKNOWN_ERROR", "Unknown error initiating channel creation.");
     }
   } 
   else if (method_call.method_name().compare("openNotificationSettingPage") == 0) {
