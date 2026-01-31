@@ -79,6 +79,18 @@ try {
 await WindowsNotificationService.instance.openNotificationSettingPage();
 ```
 
+### Get Channel URI
+
+```dart
+try {
+  final channel = await WindowsNotificationService.instance.getChannelUri();
+  print('URI: ${channel.uri}');
+  print('Expiration: ${channel.expirationTime}');
+} catch (e) {
+  print('Error: $e');
+}
+```
+
 ## Troubleshooting
 
 - **Error `WINRT_ERROR` (0x80070490)**:
