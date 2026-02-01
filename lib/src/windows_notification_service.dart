@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:wns_flutter/src/model/channel_uri.dart';
-import 'package:wns_flutter/src/model/notification.dart';
 import 'package:wns_flutter/src/service/notification_service.dart';
 import 'package:wns_flutter/src/service/setting_service.dart';
 
@@ -80,7 +79,9 @@ class WindowsNotificationService {
   ///
   /// en: Retrieves the notification information if the app was launched by clicking a notification.
   /// May return null if the app was not launched via a notification.
-  Future<WindowsNotification?> getLaunchNotification() {
-    return _wnsNotificationService.getLaunchNotification();
-  }
+
+  // TODO
+  // Future<WindowsNotification?> getLaunchNotification() {
+  //   return _wnsNotificationService.getLaunchNotification();
+  // }
 }
