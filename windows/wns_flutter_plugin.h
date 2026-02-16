@@ -4,7 +4,15 @@
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
 #include <flutter/event_sink.h>
+#if __has_include(<flutter/event_stream_handler.h>)
+#include <flutter/event_stream_handler.h>
+#elif __has_include(<flutter/stream_handler.h>)
+#include <flutter/stream_handler.h>
+#elif __has_include(<flutter/stream_handler_error.h>)
 #include <flutter/stream_handler_error.h>
+#else
+#error "No compatible Flutter stream handler header found."
+#endif
 
 #include <winrt/Windows.Networking.PushNotifications.h>
 
