@@ -6,8 +6,11 @@ import '../model/notification.dart';
 
 class NotificationService {
   final MethodChannel _channel;
+  final EventChannel _eventChannel;
 
-  const NotificationService(MethodChannel channel) : _channel = channel;
+  const NotificationService(MethodChannel channel, EventChannel eventChannel)
+    : _channel = channel,
+      _eventChannel = eventChannel;
 
   // Wns Channel uri 불러오기
   // WinRT API : PushNotificationChannelManager::CreatePushNotificationChannelForApplicationAsync()
@@ -34,5 +37,17 @@ class NotificationService {
 
   Future<WindowsNotification?> getLaunchNotification() {
     throw WnsUnknownException();
+  }
+
+  Stream<WindowsNotification> onMessage() {
+    return _eventChannel.receiveBroadcastStream().map((dynamic event) {
+      if (event is Map<Object?, Object?>) {
+        return WindowsNotification.fromMap(event);
+      }
+
+      throw WnsUnknownException(
+        message: 'Unexpected message payload type: ${event.runtimeType}',
+      );
+    });
   }
 }

@@ -3,6 +3,10 @@
 
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
+#include <flutter/event_sink.h>
+#include <flutter/stream_handler_error.h>
+
+#include <winrt/Windows.Networking.PushNotifications.h>
 
 #include <memory>
 
@@ -26,6 +30,18 @@ class WnsFlutterPlugin : public flutter::Plugin {
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
 
  private:
+  std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> OnListen(
+      const flutter::EncodableValue* arguments,
+      std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& events);
+  std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> OnCancel(
+      const flutter::EncodableValue* arguments);
+  void AttachPushNotificationHandler();
+  void DetachPushNotificationHandler();
+
+  std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> event_sink_;
+  winrt::Windows::Networking::PushNotifications::PushNotificationChannel push_channel_{nullptr};
+  winrt::event_token push_notification_received_token_{};
+  bool has_push_notification_handler_ = false;
 };
 
 }  // namespace wns_flutter

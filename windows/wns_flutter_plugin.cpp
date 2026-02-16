@@ -10,12 +10,16 @@
 #include <winrt/Windows.UI.Notifications.h>
 
 #include <flutter/method_channel.h>
+#include <flutter/event_channel.h>
+#include <flutter/event_sink.h>
 #include <flutter/plugin_registrar_windows.h>
+#include <flutter/stream_handler_functions.h>
 #include <flutter/standard_method_codec.h>
 
 #include <winrt/Windows.Networking.PushNotifications.h>
 #include <winrt/Windows.Foundation.h>
 
+#include <chrono>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -61,24 +65,40 @@ void NotPackagedError(std::unique_ptr<flutter::MethodResult<flutter::EncodableVa
 
 void WnsFlutterPlugin::RegisterWithRegistrar(
     flutter::PluginRegistrarWindows *registrar) {
-  auto channel =
+  auto method_channel =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
           registrar->messenger(), "wns_flutter",
+          &flutter::StandardMethodCodec::GetInstance());
+  auto event_channel =
+      std::make_unique<flutter::EventChannel<flutter::EncodableValue>>(
+          registrar->messenger(), "wns_flutter/on_message",
           &flutter::StandardMethodCodec::GetInstance());
 
   auto plugin = std::make_unique<WnsFlutterPlugin>();
 
-  channel->SetMethodCallHandler(
+  method_channel->SetMethodCallHandler(
       [plugin_pointer = plugin.get()](const auto &call, auto result) {
         plugin_pointer->HandleMethodCall(call, std::move(result));
       });
+  event_channel->SetStreamHandler(
+      std::make_unique<flutter::StreamHandlerFunctions<flutter::EncodableValue>>(
+          [plugin_pointer = plugin.get()](
+              const flutter::EncodableValue* arguments,
+              std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& events) {
+            return plugin_pointer->OnListen(arguments, std::move(events));
+          },
+          [plugin_pointer = plugin.get()](const flutter::EncodableValue* arguments) {
+            return plugin_pointer->OnCancel(arguments);
+          }));
 
   registrar->AddPlugin(std::move(plugin));
 }
 
 WnsFlutterPlugin::WnsFlutterPlugin() {}
 
-WnsFlutterPlugin::~WnsFlutterPlugin() {}
+WnsFlutterPlugin::~WnsFlutterPlugin() {
+  DetachPushNotificationHandler();
+}
 
 // Helper function to launch settings async
 winrt::fire_and_forget LaunchSettingsAsync(
@@ -149,13 +169,16 @@ void WnsFlutterPlugin::HandleMethodCall(
       
       op = winrt::Windows::Networking::PushNotifications::PushNotificationChannelManager::CreatePushNotificationChannelForApplicationAsync();
 
-      op.Completed([shared_result](
+      op.Completed([this, shared_result](
         winrt::Windows::Foundation::IAsyncOperation<winrt::Windows::Networking::PushNotifications::PushNotificationChannel> const& asyncInfo,
         winrt::Windows::Foundation::AsyncStatus const& asyncStatus) {
           
           if (asyncStatus == winrt::Windows::Foundation::AsyncStatus::Completed) {
              try {
                 auto channel = asyncInfo.GetResults();
+                DetachPushNotificationHandler();
+                push_channel_ = channel;
+                AttachPushNotificationHandler();
                 auto uri = winrt::to_string(channel.Uri());
                 auto expiration = channel.ExpirationTime();
 
@@ -203,6 +226,85 @@ void WnsFlutterPlugin::HandleMethodCall(
   else {
     result->NotImplemented();
   }
+}
+
+std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>>
+WnsFlutterPlugin::OnListen(
+    const flutter::EncodableValue* /*arguments*/,
+    std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& events) {
+  if (!HasPackageIdentity()) {
+    return std::make_unique<flutter::StreamHandlerError<flutter::EncodableValue>>(
+        "IDENTITY_NOT_FOUND",
+        "Windows package identity is required. Register the app via MSIX before subscribing.");
+  }
+
+  event_sink_ = std::move(events);
+  AttachPushNotificationHandler();
+
+  return nullptr;
+}
+
+std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>>
+WnsFlutterPlugin::OnCancel(const flutter::EncodableValue* /*arguments*/) {
+  event_sink_.reset();
+  DetachPushNotificationHandler();
+  return nullptr;
+}
+
+void WnsFlutterPlugin::AttachPushNotificationHandler() {
+  if (!event_sink_ || !push_channel_ || has_push_notification_handler_) {
+    return;
+  }
+
+  push_notification_received_token_ = push_channel_.PushNotificationReceived(
+      [this](
+          winrt::Windows::Networking::PushNotifications::PushNotificationChannel const& channel,
+          winrt::Windows::Networking::PushNotifications::PushNotificationReceivedEventArgs const& args) {
+        if (!event_sink_) {
+          return;
+        }
+
+        flutter::EncodableMap event;
+        const auto type = args.NotificationType();
+        std::string type_text = "unknown";
+        std::string payload = "";
+
+        if (type == winrt::Windows::Networking::PushNotifications::PushNotificationType::Raw) {
+          type_text = "raw";
+          payload = winrt::to_string(args.RawNotification().Content());
+        } else if (type == winrt::Windows::Networking::PushNotifications::PushNotificationType::Toast) {
+          type_text = "toast";
+        } else if (type == winrt::Windows::Networking::PushNotifications::PushNotificationType::Tile) {
+          type_text = "tile";
+        } else if (type == winrt::Windows::Networking::PushNotifications::PushNotificationType::Badge) {
+          type_text = "badge";
+        } else if (type == winrt::Windows::Networking::PushNotifications::PushNotificationType::TileFlyout) {
+          type_text = "tileFlyout";
+        }
+
+        const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+
+        event[flutter::EncodableValue("type")] = flutter::EncodableValue(type_text);
+        event[flutter::EncodableValue("payload")] = flutter::EncodableValue(payload);
+        event[flutter::EncodableValue("channelUri")] =
+            flutter::EncodableValue(winrt::to_string(channel.Uri()));
+        event[flutter::EncodableValue("receivedAt")] =
+            flutter::EncodableValue(static_cast<int64_t>(now_ms));
+
+        event_sink_->Success(flutter::EncodableValue(event));
+      });
+
+  has_push_notification_handler_ = true;
+}
+
+void WnsFlutterPlugin::DetachPushNotificationHandler() {
+  if (!push_channel_ || !has_push_notification_handler_) {
+    return;
+  }
+
+  push_channel_.PushNotificationReceived(push_notification_received_token_);
+  has_push_notification_handler_ = false;
 }
 
 }  // namespace wns_flutter

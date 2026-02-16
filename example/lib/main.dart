@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:wns_flutter/wns_flutter.dart';
 
+import 'package:wns_flutter_example/notification_listener_card.dart';
 import 'package:wns_flutter_example/notification_setting_card.dart';
 import 'package:wns_flutter_example/windows_notification_service_card.dart';
 
@@ -28,6 +28,7 @@ class MyAppState extends State<MyApp> {
             children: [
               NotificationSettingCard(),
               WindowsNotificationServiceCard(),
+              NotificationListenerCard(),
             ],
           ),
         ),

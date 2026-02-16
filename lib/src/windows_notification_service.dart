@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:wns_flutter/src/model/channel_uri.dart';
+import 'package:wns_flutter/src/model/notification.dart';
 import 'package:wns_flutter/src/service/notification_service.dart';
 import 'package:wns_flutter/src/service/setting_service.dart';
 
@@ -7,6 +8,9 @@ import 'model/notification_setting.dart';
 
 class WindowsNotificationService {
   static const MethodChannel _channel = MethodChannel('wns_flutter');
+  static const EventChannel _messageChannel = EventChannel(
+    'wns_flutter/on_message',
+  );
 
   static final WindowsNotificationService instance =
       WindowsNotificationService._();
@@ -16,7 +20,7 @@ class WindowsNotificationService {
 
   WindowsNotificationService._()
     : _wnsSettingService = SettingService(_channel),
-      _wnsNotificationService = NotificationService(_channel);
+      _wnsNotificationService = NotificationService(_channel, _messageChannel);
 
   /// ko: 현재 앱의 알림 설정 상태를 조회합니다.
   /// 결과는 [WnsNotificationStatus] 객체로 반환되며, 시스템 및 앱의 알림 권한 상태를 포함합니다.
@@ -43,6 +47,13 @@ class WindowsNotificationService {
   /// This URI should be registered with your Push Notification Provider to send notifications.
   Future<ChannelUri> getChannelUri() {
     return _wnsNotificationService.getChannelUri();
+  }
+
+  /// ko: 앱이 실행 중일 때 수신되는 WNS 푸시 메시지 스트림입니다.
+  ///
+  /// en: Stream of WNS push messages received while the app is running.
+  Stream<WindowsNotification> onMessage() {
+    return _wnsNotificationService.onMessage();
   }
 
   /// ko: 앱이 알림을 클릭하여 실행되었을 때, 해당 알림의 정보를 가져옵니다.
