@@ -2,6 +2,7 @@
 
 // This must be included before many other Windows headers.
 #include <windows.h>
+#include <appmodel.h>
 
 // C++/WinRT Headers
 #include <winrt/Windows.Foundation.h>
@@ -17,6 +18,7 @@
 
 #include <memory>
 #include <sstream>
+#include <string>
 
 // Use C++/WinRT namespaces
 using namespace winrt;
@@ -25,6 +27,33 @@ using namespace Windows::System;
 using namespace Windows::UI::Notifications;
 
 namespace wns_flutter {
+
+namespace {
+
+bool HasPackageIdentity() {
+  UINT32 length = 0;
+  const LONG rc = GetCurrentPackageFullName(&length, nullptr);
+  if (rc == APPMODEL_ERROR_NO_PACKAGE) {
+    return false;
+  }
+
+  if (rc == ERROR_INSUFFICIENT_BUFFER && length > 0) {
+    std::wstring full_name;
+    full_name.resize(length);
+    const LONG second = GetCurrentPackageFullName(&length, full_name.data());
+    return second == ERROR_SUCCESS;
+  }
+
+  return rc == ERROR_SUCCESS;
+}
+
+void NotPackagedError(std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+  result->Error(
+      "IDENTITY_NOT_FOUND",
+      "Windows package identity is required. Register the app via MSIX or sparse package before calling this API.");
+}
+
+}  // namespace
 
 // Helper to fire-and-forget async operations without blocking
 // This is a minimal implementation of fire_and_forget structure if not using the one from winrt
@@ -80,31 +109,15 @@ void WnsFlutterPlugin::HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue> &method_call,
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
   
-  if (method_call.method_name().compare("initialize") == 0) {
-    const auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
-    if (arguments) {
-      auto aumid_it = arguments->find(flutter::EncodableValue("aumid"));
-      if (aumid_it != arguments->end()) {
-        if (std::holds_alternative<std::string>(aumid_it->second)) {
-           aumid_ = std::get<std::string>(aumid_it->second);
-        }
-      }
+  if (method_call.method_name().compare("getNotificationSettingStatus") == 0) {
+    if (!HasPackageIdentity()) {
+      NotPackagedError(std::move(result));
+      return;
     }
-    result->Success();
-  }
-  else if (method_call.method_name().compare("getNotificationSettingStatus") == 0) {
     try {
       // ToastNotificationManager::CreateToastNotifier() creates a notifier for the current app.
       
-      ToastNotifier notifier = nullptr;
-      
-      if (!aumid_.empty()) {
-        // Debug mode: use the provided AUMID
-        notifier = ToastNotificationManager::CreateToastNotifier(winrt::to_hstring(aumid_));
-      } else {
-        // Release mode or no AUMID: use Package Identity
-        notifier = ToastNotificationManager::CreateToastNotifier();
-      }
+      ToastNotifier notifier = ToastNotificationManager::CreateToastNotifier();
       
       auto setting = notifier.Setting();
       result->Success(flutter::EncodableValue((int)setting));
@@ -114,7 +127,7 @@ void WnsFlutterPlugin::HandleMethodCall(
       
       // Additional hint for common error
       if (ex.code() == (winrt::hresult)0x80070490) { // Element not found
-         error_msg << " (Hint: Application Identity not found. If running in Debug mode, call WnsFlutter.initialize(aumid: '...') with a valid AUMID.)";
+         error_msg << " (Hint: Package identity not found. Register the app as MSIX or sparse before running.)";
       }
 
       result->Error("WINRT_ERROR", "Failed to get notification setting.",
@@ -124,17 +137,17 @@ void WnsFlutterPlugin::HandleMethodCall(
     }
   }
   else if (method_call.method_name().compare("getChannelUri") == 0) {
+    if (!HasPackageIdentity()) {
+      NotPackagedError(std::move(result));
+      return;
+    }
     // Convert unique_ptr to shared_ptr to capture it in lambda
     std::shared_ptr<flutter::MethodResult<flutter::EncodableValue>> shared_result = std::move(result);
     
     try {
       winrt::Windows::Foundation::IAsyncOperation<winrt::Windows::Networking::PushNotifications::PushNotificationChannel> op = nullptr;
       
-      if (!aumid_.empty()) {
-        op = winrt::Windows::Networking::PushNotifications::PushNotificationChannelManager::CreatePushNotificationChannelForApplicationAsync(winrt::to_hstring(aumid_));
-      } else {
-        op = winrt::Windows::Networking::PushNotifications::PushNotificationChannelManager::CreatePushNotificationChannelForApplicationAsync();
-      }
+      op = winrt::Windows::Networking::PushNotifications::PushNotificationChannelManager::CreatePushNotificationChannelForApplicationAsync();
 
       op.Completed([shared_result](
         winrt::Windows::Foundation::IAsyncOperation<winrt::Windows::Networking::PushNotifications::PushNotificationChannel> const& asyncInfo,
@@ -165,7 +178,7 @@ void WnsFlutterPlugin::HandleMethodCall(
                        << ". HRESULT: 0x" << std::hex << asyncInfo.ErrorCode().value;
              
              if (asyncInfo.ErrorCode().value == (winrt::hresult)0x80070490) {
-               error_msg << " (Hint: Identity not found. Check AUMID or MSIX packaging.)";
+               error_msg << " (Hint: Package identity not found. Register the app as MSIX or sparse before running.)";
              }
              
              shared_result->Error("CHANNEL_ERROR", "Failed to create push notification channel.",

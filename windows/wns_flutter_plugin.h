@@ -26,7 +26,6 @@ class WnsFlutterPlugin : public flutter::Plugin {
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
 
  private:
-  std::string aumid_;
 };
 
 }  // namespace wns_flutter
