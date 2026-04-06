@@ -15,28 +15,29 @@ namespace test {
 
 namespace {
 
-using flutter::EncodableMap;
 using flutter::EncodableValue;
 using flutter::MethodCall;
 using flutter::MethodResultFunctions;
 
 }  // namespace
 
-TEST(WnsFlutterPlugin, GetPlatformVersion) {
+TEST(WnsFlutterPlugin, GetInitialMessageReturnsNullWithoutActivation) {
   WnsFlutterPlugin plugin;
-  // Save the reply value from the success callback.
-  std::string result_string;
+  bool success_called = false;
+  const EncodableValue* success_value =
+      reinterpret_cast<const EncodableValue*>(1);
+
   plugin.HandleMethodCall(
-      MethodCall("getPlatformVersion", std::make_unique<EncodableValue>()),
+      MethodCall<>("getInitialMessage", std::make_unique<EncodableValue>()),
       std::make_unique<MethodResultFunctions<>>(
-          [&result_string](const EncodableValue* result) {
-            result_string = std::get<std::string>(*result);
+          [&success_called, &success_value](const EncodableValue* result) {
+            success_called = true;
+            success_value = result;
           },
           nullptr, nullptr));
 
-  // Since the exact string varies by host, just ensure that it's a string
-  // with the expected format.
-  EXPECT_TRUE(result_string.rfind("Windows ", 0) == 0);
+  EXPECT_TRUE(success_called);
+  EXPECT_EQ(success_value, nullptr);
 }
 
 }  // namespace test
