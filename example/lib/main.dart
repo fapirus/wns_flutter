@@ -1,33 +1,30 @@
 import 'package:flutter/material.dart';
-import 'package:wns_flutter/wns_flutter.dart';
 
 import 'package:wns_flutter_example/notification_setting_card.dart';
 import 'package:wns_flutter_example/windows_notification_service_card.dart';
+import 'package:wns_flutter_example/wns_demo_client.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MyApp());
+  runApp(MyApp(client: DefaultWnsDemoClient()));
 }
 
 @immutable
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key, required this.client});
 
-  @override
-  State<StatefulWidget> createState() => MyAppState();
-}
+  final WnsDemoClient client;
 
-class MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       home: Scaffold(
-        appBar: AppBar(title: Text('Windows Notification Service')),
+        appBar: AppBar(title: const Text('Windows Notification Service')),
         body: Center(
           child: ListView(
             children: [
-              NotificationSettingCard(),
-              WindowsNotificationServiceCard(),
+              NotificationSettingCard(client: client),
+              WindowsNotificationServiceCard(client: client),
             ],
           ),
         ),

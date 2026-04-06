@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:wns_flutter/wns_flutter.dart';
+import 'package:wns_flutter_example/wns_demo_client.dart';
 
 class NotificationSettingCard extends StatefulWidget {
-  const NotificationSettingCard({super.key});
+  const NotificationSettingCard({super.key, required this.client});
+
+  final WnsDemoClient client;
 
   @override
   State<StatefulWidget> createState() => NotificationSettingCardState();
 }
 
 class NotificationSettingCardState extends State<NotificationSettingCard> {
-  final _wnsFlutter = WindowsNotificationService.instance;
   String _statusText = '-';
 
   @override
@@ -24,44 +26,50 @@ class NotificationSettingCardState extends State<NotificationSettingCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Notification Setting', style: theme.textTheme.headlineSmall),
-            const SizedBox(height: 8.0),
-
-            // 알림 설정 정보 불러오기
+            const SizedBox(height: 8),
             Row(
               children: [
                 const Text('Status: '),
-                Text(
-                  _statusText,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Text(
+                    _statusText,
+                    key: const ValueKey('notification-status-value'),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8.0),
+            const SizedBox(height: 8),
             ElevatedButton(
               onPressed: () async {
                 try {
-                  final result = await _wnsFlutter
+                  final result = await widget.client
                       .getNotificationSettingStatus();
+                  if (!mounted) {
+                    return;
+                  }
                   setState(() {
                     _statusText = result.toString();
                   });
                 } catch (e) {
-                  if (context.mounted) _showErrorDialog(e);
+                  if (context.mounted) {
+                    _showErrorDialog(e);
+                  }
                 }
               },
               child: const Text('Get Status'),
             ),
-            const SizedBox(height: 16.0),
-
-            // 알림 설정 열기
+            const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () async {
                 try {
-                  await _wnsFlutter.openNotificationSettingPage();
+                  await widget.client.openNotificationSettingPage();
                 } catch (e) {
-                  if (context.mounted) _showErrorDialog(e);
+                  if (context.mounted) {
+                    _showErrorDialog(e);
+                  }
                 }
               },
               child: const Text('Open Setting'),
@@ -81,7 +89,7 @@ class NotificationSettingCardState extends State<NotificationSettingCard> {
       code = e.code;
     }
 
-    showDialog(
+    showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Error'),
