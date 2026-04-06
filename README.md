@@ -1,102 +1,97 @@
 # wns_flutter
 
-[![한국어 문서](https://img.shields.io/badge/Language-Korean-blue)](README_ko.md)
+[![Korean Documentation](https://img.shields.io/badge/Language-Korean-blue)](README_ko.md)
 
-Flutter Plugin for Windows Notification Service (WNS).
-Easily implement push notifications and manage notification settings for Windows applications using Flutter.
+Flutter plugin for Windows Notification Service (WNS).
+This package targets packaged Windows apps that use MSIX, Partner Center registration, and the classic WNS channel flow.
+
+## Current Status
+
+The current development target is `0.0.2`.
+This version focuses on the toast push lifecycle that Flutter developers typically expect from Firebase Cloud Messaging style APIs.
 
 ## Features
 
-- **Notification Settings**: Check and open system notification settings.
-- **Channel URI**: (Coming Soon) Retrieve WNS Channel URI for push notifications.
-- **Native Integration**: Built with C++/WinRT for modern Windows 10/11 support.
+- Read Windows notification setting status.
+- Open the Windows notification settings page.
+- Create a WNS channel URI from a packaged Windows app.
+- Receive foreground toast deliveries through `onMessage`.
+- Read activation payloads through `getInitialMessage` and `onMessageOpenedApp`.
+- Control foreground toast presentation through `setForegroundNotificationPresentation`.
 
-## Getting Started
-
-Add this to your package's `pubspec.yaml` file:
+## Installation
 
 ```yaml
 dependencies:
-  wns_flutter: ^0.0.1
+  wns_flutter: ^0.0.2
 ```
 
-## Important: Windows App Identity
+## Windows Requirements
 
-Windows Notification Service (WNS) requires your application to have a valid **Package Identity** (e.g., installed via MSIX).
+WNS support in this plugin assumes all of the following.
 
-### 1. Release Mode (MSIX)
-When you package your app as an MSIX (using `flutter_distributor` or Visual Studio), the plugin automatically detects the Package Identity. You don't need any extra configuration.
+- The app is installed as an MSIX package.
+- The app has package identity at runtime.
+- The app is registered for WNS in Partner Center.
+- The server sends WNS toast payloads to the channel URI issued for the installed app.
 
-### 2. Debug Mode (Unpackaged)
-When running with `flutter run -d windows`, your app runs as an unpackaged Win32 app and **does not have an identity**. This causes WNS APIs to fail with `Element not found (0x80070490)`.
+`flutter run -d windows` starts an unpackaged Win32 process, so WNS-dependent APIs fail with `0x80070490`.
+The plugin does not provide a temporary AUMID workaround.
 
-To fix this during development, you must initialize the plugin with a valid **App User Model ID (AUMID)** of an app already installed on your PC.
+## Lifecycle Mapping
 
-#### How to find an AUMID?
-Open PowerShell and run:
-```powershell
-Get-StartApps
-```
-Pick an AppID (e.g., `Microsoft.MicrosoftEdge_8wekyb3d8bbwe!MicrosoftEdge` or your own registered app).
-
-#### Initialization Code
-Call `WindowsNotificationService.instance.initialize` in your `main()` method **only for debugging**:
-
-```dart
-import 'package:wns_flutter/wns_flutter.dart';
-
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // ONLY for Debugging: Use a valid AUMID from your PC.
-  // In Release mode, this parameter is ignored automatically.
-  await WindowsNotificationService.instance.initialize(
-    aumId: 'Microsoft.MicrosoftEdge_8wekyb3d8bbwe!MicrosoftEdge', // Example
-  );
-
-  runApp(const MyApp());
-}
-```
+| App state | Flutter API | Meaning |
+| --- | --- | --- |
+| Foreground / process alive | `onMessage` | Toast push arrived while the app process was running |
+| Terminated -> launched from toast | `getInitialMessage()` | Read the activation payload that launched the app |
+| Background / foreground -> toast selected | `onMessageOpenedApp` | Read the activation payload when the running app is opened from a toast |
+| Foreground | `setForegroundNotificationPresentation(alert: ...)` | Keep or suppress the default foreground toast |
 
 ## Usage
 
-### Check Notification Status
-
 ```dart
-final _wnsService = WindowsNotificationService.instance;
+final service = WindowsNotificationService.instance;
 
-try {
-  final status = await _wnsService.getNotificationSettingStatus();
-  print('Status: ${status.status}'); // authorized, denied, etc.
-} catch (e) {
-  print('Error: $e');
+final channel = await service.getChannelUri();
+print(channel.uri);
+
+await service.setForegroundNotificationPresentation(alert: true);
+
+final initialMessage = await service.getInitialMessage();
+if (initialMessage != null) {
+  print(initialMessage.arguments);
 }
+
+service.onMessage.listen((message) {
+  print(message.arguments);
+  print(message.payload.data);
+});
+
+service.onMessageOpenedApp.listen((activation) {
+  print(activation.arguments);
+  print(activation.userInput);
+});
 ```
 
-### Open Settings Page
+## Development Workflow
 
-```dart
-await WindowsNotificationService.instance.openNotificationSettingPage();
-```
+1. Package and install the app as MSIX.
+2. Confirm package identity and Partner Center registration.
+3. Request a channel URI from the installed app.
+4. Send WNS toast payloads from your server.
+5. Validate `onMessage`, `getInitialMessage`, and `onMessageOpenedApp`.
 
-### Get Channel URI
-
-```dart
-try {
-  final channel = await WindowsNotificationService.instance.getChannelUri();
-  print('URI: ${channel.uri}');
-  print('Expiration: ${channel.expirationTime}');
-} catch (e) {
-  print('Error: $e');
-}
-```
+For the packaged setup flow, see [docs/windows/msix-wns-setup.md](docs/windows/msix-wns-setup.md).
 
 ## Troubleshooting
 
-- **Error `WINRT_ERROR` (0x80070490)**:
-  - Cause: The app has no identity.
-  - Fix: Ensure you called `WnsFlutter.initialize(aumid: ...)` with a valid AUMID in debug mode.
+- `WINRT_ERROR` (`0x80070490`)
+  - Cause: the current process does not have package identity.
+  - Fix: install and run the app as MSIX before calling WNS APIs.
+- Channel creation fails
+  - Cause: package identity, connectivity, or WNS registration is incomplete.
+  - Fix: confirm the MSIX install, Partner Center registration, and network connectivity.
 
 ## Minimum Requirements
 
-- Windows 10, version 1809 (Build 17763) or later.
+- Windows 10 version 1809 (build 17763) or later.

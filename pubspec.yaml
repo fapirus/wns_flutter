@@ -1,6 +1,6 @@
 name: wns_flutter
-description: A Flutter plugin for Windows Notification Service (WNS), supporting toast notifications and raw push notifications.
-version: 0.0.1
+description: A Flutter plugin for packaged Windows Notification Service (WNS) toast lifecycle support.
+version: 0.0.2
 repository: https://github.com/fapirus/wns_flutter
 
 environment:

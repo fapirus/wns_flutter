@@ -1,100 +1,95 @@
 # wns_flutter
 
-Windows 알림 서비스(WNS)를 위한 Flutter 플러그인입니다.
-Flutter를 사용하여 Windows 애플리케이션의 푸시 알림을 구현하고 알림 설정을 쉽게 관리할 수 있습니다.
+Windows Notification Service(WNS)를 위한 Flutter 플러그인입니다.
+이 패키지는 MSIX로 설치되고 Partner Center 등록이 완료된 packaged Windows 앱을 기준으로 동작합니다.
 
-## 기능
+## 현재 상태
 
-- **알림 설정**: 시스템 알림 설정 상태 확인 및 설정 페이지 열기.
-- **채널 URI**: (예정) 푸시 알림 수신을 위한 WNS 채널 URI 발급.
-- **네이티브 연동**: C++/WinRT를 사용하여 최신 Windows 10/11을 완벽하게 지원합니다.
+현재 개발 목표 버전은 `0.0.2`입니다.
+이번 버전은 FCM과 유사한 사용감을 목표로 toast push lifecycle에 집중합니다.
 
-## 시작하기
+## 지원 기능
 
-`pubspec.yaml` 파일에 다음을 추가하세요:
+- Windows 알림 설정 상태 조회
+- Windows 알림 설정 페이지 열기
+- packaged 앱 기준 WNS channel URI 발급
+- `onMessage`를 통한 foreground toast 수신
+- `getInitialMessage`, `onMessageOpenedApp`를 통한 activation payload 조회
+- `setForegroundNotificationPresentation`을 통한 foreground toast 기본 표시 제어
+
+## 설치
 
 ```yaml
 dependencies:
-  wns_flutter: ^0.0.1
+  wns_flutter: ^0.0.2
 ```
 
-## 중요: Windows 앱 아이덴티티 (App Identity)
+## Windows 요구 사항
 
-WNS(Windows Notification Service)를 사용하려면 애플리케이션에 유효한 **패키지 아이덴티티(Package Identity)** 가 있어야 합니다 (예: MSIX로 설치됨).
+이 플러그인은 아래 조건을 모두 전제로 합니다.
 
-### 1. 릴리즈 모드 (MSIX)
-앱을 MSIX로 패키징하여 배포하는 경우 (`flutter_distributor` 또는 Visual Studio 사용), 플러그인이 자동으로 패키지 아이덴티티를 감지합니다. 별도의 설정이 필요하지 않습니다.
+- 앱이 MSIX로 설치되어 있어야 합니다.
+- 런타임에 package identity가 있어야 합니다.
+- Partner Center에 WNS 등록이 완료되어 있어야 합니다.
+- 서버가 설치된 앱의 channel URI로 WNS toast payload를 전송해야 합니다.
 
-### 2. 디버그 모드 (Unpackaged)
-`flutter run -d windows`로 실행할 때, 앱은 패키징되지 않은 일반 Win32 앱으로 실행되며 **아이덴티티가 없습니다**. 이 경우 WNS API 호출 시 `Element not found (0x80070490)` 오류가 발생합니다.
+`flutter run -d windows`는 unpackaged Win32 프로세스로 실행되기 때문에 WNS API가 `0x80070490`으로 실패합니다.
+이 플러그인은 임시 AUMID 우회 경로를 제공하지 않습니다.
 
-개발 중에 이 문제를 해결하려면 PC에 이미 설치된 다른 앱의 **App User Model ID (AUMID)** 를 빌려와서 초기화해야 합니다.
+## Lifecycle 매핑
 
-#### AUMID 찾는 방법
-PowerShell을 열고 다음 명령어를 실행하세요:
-```powershell
-Get-StartApps
-```
-나타나는 목록에서 `Microsoft.MicrosoftEdge` 등 원하는 AppID를 복사하세요.
+| 앱 상태 | Flutter API | 의미 |
+| --- | --- | --- |
+| Foreground / 프로세스 실행 중 | `onMessage` | 앱 프로세스가 실행 중일 때 toast push 수신 |
+| Terminated -> toast로 실행 | `getInitialMessage()` | 앱을 실행시킨 activation payload 복원 |
+| Background / foreground -> toast 선택 | `onMessageOpenedApp` | 실행 중인 앱으로 전달된 activation payload 수신 |
+| Foreground | `setForegroundNotificationPresentation(alert: ...)` | 기본 foreground toast 표시 유지 또는 억제 |
 
-#### 초기화 코드
-`main()` 함수에서 **디버깅용으로만** `WindowsNotificationService.instance.initialize`를 호출하세요.
+## 사용 예시
 
 ```dart
-import 'package:wns_flutter/wns_flutter.dart';
+final service = WindowsNotificationService.instance;
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+final channel = await service.getChannelUri();
+print(channel.uri);
 
-  // 주의: 디버깅 전용입니다. PC에 있는 유효한 AUMID를 입력하세요.
-  // 릴리즈 모드에서는 이 코드가 자동으로 무시되므로 안전합니다.
-  await WindowsNotificationService.instance.initialize(
-    aumId: 'Microsoft.MicrosoftEdge_8wekyb3d8bbwe!MicrosoftEdge', // 예시
-  );
+await service.setForegroundNotificationPresentation(alert: true);
 
-  runApp(const MyApp());
+final initialMessage = await service.getInitialMessage();
+if (initialMessage != null) {
+  print(initialMessage.arguments);
 }
+
+service.onMessage.listen((message) {
+  print(message.arguments);
+  print(message.payload.data);
+});
+
+service.onMessageOpenedApp.listen((activation) {
+  print(activation.arguments);
+  print(activation.userInput);
+});
 ```
 
-## 사용법
+## 개발 절차
 
-### 알림 설정 상태 확인
+1. 앱을 MSIX로 패키징하고 설치합니다.
+2. package identity와 Partner Center 등록 상태를 확인합니다.
+3. 설치된 앱에서 channel URI를 발급합니다.
+4. 서버에서 WNS toast payload를 전송합니다.
+5. `onMessage`, `getInitialMessage`, `onMessageOpenedApp` 동작을 검증합니다.
 
-```dart
-final _wnsService = WindowsNotificationService.instance;
+packaged 설정 절차는 [docs/windows/msix-wns-setup.md](docs/windows/msix-wns-setup.md)를 참고하세요.
 
-try {
-  final status = await _wnsService.getNotificationSettingStatus();
-  print('상태: ${status.status}'); // authorized, denied 등
-} catch (e) {
-  print('에러: $e');
-}
-```
+## 문제 해결
 
-### 설정 페이지 열기
-
-```dart
-await WindowsNotificationService.instance.openNotificationSettingPage();
-```
-
-### 채널 URI 발급
-
-```dart
-try {
-  final channel = await WindowsNotificationService.instance.getChannelUri();
-  print('URI: ${channel.uri}');
-  print('만료 시간: ${channel.expirationTime}');
-} catch (e) {
-  print('에러: $e');
-}
-```
-
-## 트러블슈팅
-
-- **에러 `WINRT_ERROR` (0x80070490)**:
-  - 원인: 앱에 아이덴티티가 없습니다.
-  - 해결: 디버그 모드에서 `WnsFlutter.initialize(aumid: ...)`를 호출하여 유효한 AUMID를 제공했는지 확인하세요.
+- `WINRT_ERROR` (`0x80070490`)
+  - 원인: 현재 프로세스에 package identity가 없습니다.
+  - 해결: 앱을 MSIX로 설치한 뒤 WNS API를 호출하세요.
+- Channel 생성 실패
+  - 원인: package identity, 네트워크, Partner Center 등록 중 하나가 불완전합니다.
+  - 해결: MSIX 설치, Partner Center 등록, 네트워크 상태를 다시 확인하세요.
 
 ## 최소 요구 사항
 
-- Windows 10 버전 1809 (Build 17763) 이상.
+- Windows 10 version 1809 (build 17763) 이상

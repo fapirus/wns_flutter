@@ -18,8 +18,16 @@ dev_dependencies:
     sdk: flutter
   flutter_test:
     sdk: flutter
-
   flutter_lints: ^6.0.0
+  msix: ^3.16.8
 
 flutter:
   uses-material-design: true
+
+msix_config:
+  display_name: wns_flutter Example
+  publisher_display_name: Partner Center Publisher Name
+  identity_name: com.example.wns_flutter_example
+  msix_version: 0.0.2.0
+  publisher: CN=Partner Center Publisher
+  logo_path: windows/runner/resources/app_icon.ico
