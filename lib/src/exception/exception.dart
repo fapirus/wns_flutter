@@ -45,3 +45,12 @@ class WnsPlatformException extends WnsException {
     );
   }
 }
+
+class WnsMessageParseException extends WnsException {
+  WnsMessageParseException({
+    required String message,
+    String? code,
+    dynamic details,
+    StackTrace? stackTrace,
+  }) : super(message, code: code, details: details, stackTrace: stackTrace);
+}
