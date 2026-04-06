@@ -1,7 +1,8 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:wns_flutter/wns_flutter.dart';
+import 'package:flutter/services.dart';
+
+import 'package:wns_flutter_example/controller/wns_example_controller.dart';
+import 'package:wns_flutter_example/model/wns_event_log_entry.dart';
 import 'package:wns_flutter_example/wns_demo_client.dart';
 
 class WindowsNotificationServiceCard extends StatefulWidget {
@@ -10,217 +11,140 @@ class WindowsNotificationServiceCard extends StatefulWidget {
   final WnsDemoClient client;
 
   @override
-  State<StatefulWidget> createState() => WindowsNotificationServiceCardState();
+  State<WindowsNotificationServiceCard> createState() =>
+      _WindowsNotificationServiceCardState();
 }
 
-class WindowsNotificationServiceCardState
+class _WindowsNotificationServiceCardState
     extends State<WindowsNotificationServiceCard> {
-  StreamSubscription<WindowsIncomingMessage>? _messageSubscription;
-  StreamSubscription<WindowsNotificationActivation>? _openedAppSubscription;
-
-  String _channelUri = '-';
-  String _initialMessage = 'Loading...';
-  String _lastIncomingMessage = '-';
-  String _lastOpenedMessage = '-';
-  bool _foregroundAlert = true;
+  late final WnsExampleController _controller;
 
   @override
   void initState() {
     super.initState();
-    _messageSubscription = widget.client.onMessage.listen((message) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _lastIncomingMessage = _formatIncomingMessage(message);
-      });
-    });
-    _openedAppSubscription = widget.client.onMessageOpenedApp.listen((event) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _lastOpenedMessage = _formatActivation(event);
-      });
-    });
-    _loadInitialMessage();
+    _controller = WnsExampleController(client: widget.client);
+    _controller.refreshInitialMessage().catchError(_showErrorDialog);
   }
 
   @override
   void dispose() {
-    _messageSubscription?.cancel();
-    _openedAppSubscription?.cancel();
+    _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
-    return Card(
-      margin: const EdgeInsets.all(12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Windows Notification Service',
-              style: theme.textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Show foreground toast'),
-              subtitle: const Text(
-                'Turn this off to suppress the default toast while the app is running.',
-              ),
-              value: _foregroundAlert,
-              onChanged: (value) async {
-                final previousValue = _foregroundAlert;
-                setState(() {
-                  _foregroundAlert = value;
-                });
-                try {
-                  await widget.client.setForegroundNotificationPresentation(
-                    alert: value,
-                  );
-                } catch (error) {
-                  if (!mounted) {
-                    return;
-                  }
-                  setState(() {
-                    _foregroundAlert = previousValue;
-                  });
-                  _showErrorDialog(error);
-                }
-              },
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ElevatedButton(
-                  onPressed: () async {
-                    try {
-                      final result = await widget.client.getChannelUri();
-                      if (!mounted) {
-                        return;
-                      }
-                      setState(() {
-                        _channelUri = result.uri;
-                      });
-                    } catch (error) {
-                      if (context.mounted) {
-                        _showErrorDialog(error);
-                      }
-                    }
-                  },
-                  child: const Text('Get Channel URI'),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Chip(
+                      avatar: Icon(
+                        Icons.desktop_windows_outlined,
+                        size: 18,
+                        color: colorScheme.onSecondaryContainer,
+                      ),
+                      label: const Text('Packaged Validation Sample'),
+                    ),
+                    Text(
+                      '${_controller.eventLogs.length} events captured',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
-                OutlinedButton(
-                  onPressed: _loadInitialMessage,
-                  child: const Text('Refresh Initial Message'),
+                const SizedBox(height: 16),
+                Text(
+                  'Windows Notification Service',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Desktop-oriented validation console for channel retrieval, cold start activation, foreground delivery, and opened-app lifecycle events.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isWide = constraints.maxWidth >= 1000;
+                    final leftColumn = Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _ControlsSection(
+                          controller: _controller,
+                          onError: _showErrorDialog,
+                        ),
+                        const SizedBox(height: 16),
+                        _SummarySection(
+                          controller: _controller,
+                          onError: _showErrorDialog,
+                        ),
+                      ],
+                    );
+
+                    if (!isWide) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          leftColumn,
+                          const SizedBox(height: 16),
+                          _EventTimelineSection(entries: _controller.eventLogs),
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(width: 340, child: leftColumn),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _EventTimelineSection(
+                            entries: _controller.eventLogs,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            _InfoBlock(
-              label: 'Channel URI',
-              value: _channelUri,
-              valueKey: const ValueKey('channel-uri-value'),
-            ),
-            const SizedBox(height: 12),
-            _InfoBlock(
-              label: 'Initial Message',
-              value: _initialMessage,
-              valueKey: const ValueKey('initial-message-value'),
-            ),
-            const SizedBox(height: 12),
-            _InfoBlock(
-              label: 'Last Foreground Message',
-              value: _lastIncomingMessage,
-              valueKey: const ValueKey('incoming-message-value'),
-            ),
-            const SizedBox(height: 12),
-            _InfoBlock(
-              label: 'Last Opened App Event',
-              value: _lastOpenedMessage,
-              valueKey: const ValueKey('opened-message-value'),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Future<void> _loadInitialMessage() async {
-    try {
-      final message = await widget.client.getInitialMessage();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _initialMessage =
-            message == null ? 'No activation message' : _formatActivation(message);
-      });
-    } catch (error) {
-      if (context.mounted) {
-        _showErrorDialog(error);
-      }
-    }
-  }
-
-  String _formatIncomingMessage(WindowsIncomingMessage message) {
-    return _formatPayload(
-      arguments: message.arguments,
-      data: message.payload.data,
-      rawPayload: message.payload.rawPayload,
-    );
-  }
-
-  String _formatActivation(WindowsNotificationActivation activation) {
-    return _formatPayload(
-      arguments: activation.arguments,
-      data: activation.payload.data,
-      rawPayload: activation.payload.rawPayload,
-      userInput: activation.userInput,
-    );
-  }
-
-  String _formatPayload({
-    required String arguments,
-    required Map<String, String> data,
-    String? rawPayload,
-    Map<String, String> userInput = const <String, String>{},
-  }) {
-    final buffer = StringBuffer()
-      ..write('arguments=')
-      ..write(arguments.isEmpty ? '-' : arguments)
-      ..write('\n')
-      ..write('data=')
-      ..write(data.isEmpty ? '{}' : data)
-      ..write('\n')
-      ..write('userInput=')
-      ..write(userInput.isEmpty ? '{}' : userInput);
-
-    if (rawPayload != null && rawPayload.isNotEmpty) {
-      buffer
-        ..write('\n')
-        ..write('rawPayload=')
-        ..write(rawPayload);
+  Future<void> _showErrorDialog(Object error) async {
+    if (!mounted) {
+      return;
     }
 
-    return buffer.toString();
-  }
-
-  void _showErrorDialog(Object error) {
-    showDialog<void>(
+    final message = error.toString();
+    await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Error'),
-        content: Text(error.toString()),
+        content: Text(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -232,36 +156,542 @@ class WindowsNotificationServiceCardState
   }
 }
 
-class _InfoBlock extends StatelessWidget {
-  const _InfoBlock({
-    required this.label,
-    required this.value,
-    required this.valueKey,
+class _ControlsSection extends StatelessWidget {
+  const _ControlsSection({
+    required this.controller,
+    required this.onError,
   });
 
-  final String label;
-  final String value;
-  final Key valueKey;
+  final WnsExampleController controller;
+  final Future<void> Function(Object error) onError;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionPanel(
+      title: 'Controls',
+      subtitle: 'Trigger lifecycle reads and adjust foreground presentation.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: SwitchListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 4,
+              ),
+              title: const Text('Show foreground toast'),
+              subtitle: const Text(
+                'Keep the native foreground toast banner visible while app events are streamed.',
+              ),
+              value: controller.foregroundAlert,
+              onChanged: (value) async {
+                try {
+                  await controller.setForegroundAlert(value);
+                } catch (error) {
+                  await onError(error);
+                }
+              },
+            ),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: () async {
+              try {
+                await controller.loadChannelUri();
+              } catch (error) {
+                await onError(error);
+              }
+            },
+            icon: const Icon(Icons.link_outlined),
+            label: const Text('Get Channel URI'),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () async {
+              try {
+                await controller.refreshInitialMessage();
+              } catch (error) {
+                await onError(error);
+              }
+            },
+            icon: const Icon(Icons.refresh),
+            label: const Text('Refresh Initial Message'),
+          ),
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const ValueKey('clear-event-logs-button'),
+              onPressed: controller.clearEventLogs,
+              icon: const Icon(Icons.delete_sweep_outlined),
+              label: const Text('Clear Event Logs'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummarySection extends StatelessWidget {
+  const _SummarySection({
+    required this.controller,
+    required this.onError,
+  });
+
+  final WnsExampleController controller;
+  final Future<void> Function(Object error) onError;
+
+  @override
+  Widget build(BuildContext context) {
+    final initialMessage = controller.initialMessage;
+
+    return _SectionPanel(
+      title: 'Summary',
+      subtitle: 'Compact status view for the latest packaged lifecycle state.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              Chip(
+                label: Text(
+                  initialMessage == null ? 'Initial Message: Empty' : 'Initial Message: Available',
+                ),
+              ),
+              if (controller.channelUri != '-')
+                ActionChip(
+                  label: const Text('Copy Channel URI'),
+                  onPressed: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: controller.channelUri),
+                    );
+                  },
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _SummaryTile(
+            label: 'Channel URI',
+            valueKey: const ValueKey('channel-uri-value'),
+            trailing: controller.channelUri == '-'
+                ? null
+                : IconButton(
+                    tooltip: 'Copy Channel URI',
+                    onPressed: () async {
+                      await Clipboard.setData(
+                        ClipboardData(text: controller.channelUri),
+                      );
+                    },
+                    icon: const Icon(Icons.copy_all_outlined, size: 18),
+                  ),
+            child: _SelectablePreviewText(controller.channelUri),
+          ),
+          const SizedBox(height: 12),
+          _SummaryTile(
+            label: 'Initial Message Checked At',
+            valueKey: const ValueKey('initial-message-checked-at-value'),
+            child: Text(
+              controller.initialMessageCheckedAt == null
+                  ? '-'
+                  : _formatDateTime(controller.initialMessageCheckedAt!),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _SummaryTile(
+            label: 'Initial Message',
+            valueKey: const ValueKey('initial-message-value'),
+            child: initialMessage == null
+                ? const Text('No activation message')
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _SelectablePreviewText(initialMessage.arguments),
+                      const SizedBox(height: 8),
+                      _InlineMetric(
+                        label: 'Data',
+                        value: _formatMap(initialMessage.payload.data),
+                      ),
+                      if (initialMessage.userInput.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        _InlineMetric(
+                          label: 'User Input',
+                          value: _formatMap(initialMessage.userInput),
+                        ),
+                      ],
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EventTimelineSection extends StatelessWidget {
+  const _EventTimelineSection({required this.entries});
+
+  final List<WnsEventLogEntry> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SectionPanel(
+      title: 'Event Timeline',
+      subtitle:
+          'Foreground and opened-app events are appended here in newest-first order.',
+      child: entries.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Text(
+                'No lifecycle events yet. Send a toast or click a notification to populate the list.',
+                key: ValueKey('empty-timeline-message'),
+              ),
+            )
+          : Column(
+              children: List<Widget>.generate(
+                entries.length,
+                (index) => Padding(
+                  padding: EdgeInsets.only(bottom: index == entries.length - 1 ? 0 : 12),
+                  child: _EventLogTile(
+                    key: ValueKey('timeline-entry-$index'),
+                    entry: entries[index],
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+class _EventLogTile extends StatelessWidget {
+  const _EventLogTile({
+    super.key,
+    required this.entry,
+  });
+
+  final WnsEventLogEntry entry;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final accentColor = switch (entry.source) {
+      WnsEventLogSource.foregroundMessage => colorScheme.primary,
+      WnsEventLogSource.openedApp => colorScheme.tertiary,
+    };
+    final sourceLabel = switch (entry.source) {
+      WnsEventLogSource.foregroundMessage => 'Foreground',
+      WnsEventLogSource.openedApp => 'Opened App',
+    };
+    final primaryLabel = entry.sourceTimestamp == null
+        ? 'Logged At: ${_formatDateTime(entry.loggedAt)}'
+        : 'Received At: ${_formatDateTime(entry.sourceTimestamp!)}';
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label),
-        const SizedBox(height: 4),
-        SelectionArea(
-          child: Text(
-            value,
-            key: valueKey,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.bold,
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: 5,
+              decoration: BoxDecoration(
+                color: accentColor,
+                borderRadius: const BorderRadius.horizontal(
+                  left: Radius.circular(20),
+                ),
+              ),
             ),
-          ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Chip(label: Text(sourceLabel)),
+                        Text(
+                          primaryLabel,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (entry.sourceTimestamp != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Logged At: ${_formatDateTime(entry.loggedAt)}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    _InlineMetric(
+                      label: 'Arguments',
+                      value: _dashIfEmpty(entry.arguments),
+                    ),
+                    const SizedBox(height: 8),
+                    _InlineMetric(
+                      label: 'Data',
+                      value: _formatMap(entry.data),
+                    ),
+                    if (entry.userInput.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      _InlineMetric(
+                        label: 'User Input',
+                        value: _formatMap(entry.userInput),
+                      ),
+                    ],
+                    if (entry.rawPayload != null &&
+                        entry.rawPayload!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: EdgeInsets.zero,
+                        title: const Text('Payload Details'),
+                        subtitle: Text(_truncate(entry.rawPayload!, 120)),
+                        children: [
+                          Container(
+                            width: double.infinity,
+                            constraints: const BoxConstraints(maxHeight: 180),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surface,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: colorScheme.outlineVariant,
+                              ),
+                            ),
+                            child: SingleChildScrollView(
+                              child: SelectableText(
+                                _formatPayload(entry.rawPayload!),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontFamily: 'Consolas',
+                                  height: 1.45,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
+}
+
+class _SectionPanel extends StatelessWidget {
+  const _SectionPanel({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
+
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryTile extends StatelessWidget {
+  const _SummaryTile({
+    required this.label,
+    required this.child,
+    this.valueKey,
+    this.trailing,
+  });
+
+  final String label;
+  final Widget child;
+  final Key? valueKey;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              ...?(trailing == null ? null : <Widget>[trailing!]),
+            ],
+          ),
+          const SizedBox(height: 8),
+          KeyedSubtree(
+            key: valueKey,
+            child: child,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectablePreviewText extends StatelessWidget {
+  const _SelectablePreviewText(this.value);
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: SelectionArea(
+        child: Text(
+          _dashIfEmpty(value),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.45),
+        ),
+      ),
+    );
+  }
+}
+
+class _InlineMetric extends StatelessWidget {
+  const _InlineMetric({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return RichText(
+      text: TextSpan(
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: colorScheme.onSurface,
+          height: 1.45,
+        ),
+        children: [
+          TextSpan(
+            text: '$label: ',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          TextSpan(text: value),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatMap(Map<String, String> data) {
+  if (data.isEmpty) {
+    return '{}';
+  }
+
+  return data.entries.map((entry) => '${entry.key}=${entry.value}').join(', ');
+}
+
+String _formatPayload(String payload) {
+  return payload.trim().isEmpty ? '-' : payload.trim();
+}
+
+String _dashIfEmpty(String value) {
+  return value.trim().isEmpty ? '-' : value;
+}
+
+String _truncate(String value, int maxLength) {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return '${value.substring(0, maxLength - 3)}...';
+}
+
+String _formatDateTime(DateTime value) {
+  String twoDigits(int number) => number.toString().padLeft(2, '0');
+
+  final year = value.year.toString().padLeft(4, '0');
+  final month = twoDigits(value.month);
+  final day = twoDigits(value.day);
+  final hour = twoDigits(value.hour);
+  final minute = twoDigits(value.minute);
+  final second = twoDigits(value.second);
+
+  return '$year-$month-$day $hour:$minute:$second';
 }

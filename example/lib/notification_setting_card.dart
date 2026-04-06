@@ -17,62 +17,116 @@ class NotificationSettingCardState extends State<NotificationSettingCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Card(
-      margin: const EdgeInsets.all(12),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Notification Setting', style: theme.textTheme.headlineSmall),
-            const SizedBox(height: 8),
             Row(
               children: [
-                const Text('Status: '),
+                Icon(
+                  Icons.tune_outlined,
+                  color: colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    _statusText,
-                    key: const ValueKey('notification-status-value'),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+                    'Notification Setting',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  final result = await widget.client
-                      .getNotificationSettingStatus();
-                  if (!mounted) {
-                    return;
-                  }
-                  setState(() {
-                    _statusText = result.toString();
-                  });
-                } catch (e) {
-                  if (context.mounted) {
-                    _showErrorDialog(e);
-                  }
-                }
-              },
-              child: const Text('Get Status'),
+            Text(
+              'Check OS notification permission state before validating toast delivery.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  await widget.client.openNotificationSettingPage();
-                } catch (e) {
-                  if (context.mounted) {
-                    _showErrorDialog(e);
-                  }
-                }
-              },
-              child: const Text('Open Setting'),
+            const SizedBox(height: 18),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Current Status',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surface,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      _statusText,
+                      key: const ValueKey('notification-status-value'),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                FilledButton.icon(
+                  onPressed: () async {
+                    try {
+                      final result = await widget.client
+                          .getNotificationSettingStatus();
+                      if (!mounted) {
+                        return;
+                      }
+                      setState(() {
+                        _statusText = result.toString();
+                      });
+                    } catch (e) {
+                      if (context.mounted) {
+                        _showErrorDialog(e);
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Get Status'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    try {
+                      await widget.client.openNotificationSettingPage();
+                    } catch (e) {
+                      if (context.mounted) {
+                        _showErrorDialog(e);
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text('Open Setting'),
+                ),
+              ],
             ),
           ],
         ),
@@ -119,9 +173,7 @@ class NotificationSettingCardState extends State<NotificationSettingCard> {
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
+            onPressed: () => Navigator.of(context).pop(),
             child: const Text('OK'),
           ),
         ],
