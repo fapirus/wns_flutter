@@ -102,25 +102,6 @@ void main() {
       expect(message.payload.data, {'route': 'inbox', 'messageId': '99'});
     });
 
-    test('invokes foreground presentation method', () async {
-      bool invoked = false;
-
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, (call) async {
-            if (call.method == 'setForegroundNotificationPresentation') {
-              invoked = true;
-              expect(call.arguments, {'alert': false});
-            }
-
-            return null;
-          });
-
-      final service = NotificationService(channel);
-      await service.setForegroundNotificationPresentation(alert: false);
-
-      expect(invoked, isTrue);
-    });
-
     test('maps incoming message events from injected stream', () async {
       final service = NotificationService(
         channel,

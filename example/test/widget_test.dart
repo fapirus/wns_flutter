@@ -32,14 +32,9 @@ void main() {
       expect(find.text('Notification Setting'), findsOneWidget);
       expect(find.text('Windows Notification Service'), findsWidgets);
       expect(find.text('Event Timeline'), findsOneWidget);
-      expect(find.text('Show foreground toast'), findsOneWidget);
       expect(find.text('Clear Event Logs'), findsOneWidget);
       expect(find.byKey(const ValueKey('theme-mode-menu')), findsOneWidget);
       expect(find.text('Initial Activation Checked At'), findsOneWidget);
-
-      await tester.tap(find.byType(Switch));
-      await tester.pumpAndSettle();
-      expect(client.alertCalls, <bool>[false]);
 
       await tester.tap(find.text('Get Settings Info'));
       await tester.pumpAndSettle();
@@ -164,7 +159,6 @@ class _FakeWnsDemoClient implements WnsDemoClient {
   final StreamController<WnsActivation> _activationController =
       StreamController<WnsActivation>.broadcast();
 
-  final List<bool> alertCalls = <bool>[];
   int initializeCalls = 0;
 
   @override
@@ -215,13 +209,6 @@ class _FakeWnsDemoClient implements WnsDemoClient {
 
   @override
   Stream<WnsActivation> get onActivation => _activationController.stream;
-
-  @override
-  Future<void> setForegroundNotificationPresentation({
-    required bool alert,
-  }) async {
-    alertCalls.add(alert);
-  }
 
   void addIncoming(WnsMessage message) {
     _messageController.add(message);

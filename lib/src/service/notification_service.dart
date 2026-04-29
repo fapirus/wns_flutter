@@ -10,8 +10,6 @@ class NotificationService {
   static const String _closeChannelMethod = 'closeChannel';
   static const String _getChannelUriMethod = 'getChannelUri';
   static const String _getInitialMessageMethod = 'getInitialMessage';
-  static const String _setForegroundPresentationMethod =
-      'setForegroundNotificationPresentation';
 
   NotificationService(
     MethodChannel channel, {
@@ -81,24 +79,6 @@ class NotificationService {
     try {
       wnsDebugLog('NotificationService.closeChannel invoke');
       await _channel.invokeMethod<void>(_closeChannelMethod);
-    } on PlatformException catch (e) {
-      throw WnsPlatformException.fromPlatformException(e);
-    } catch (e, stack) {
-      throw WnsUnknownException(message: e.toString(), stackTrace: stack);
-    }
-  }
-
-  Future<void> setForegroundNotificationPresentation({
-    required bool alert,
-  }) async {
-    try {
-      wnsDebugLog(
-        'NotificationService.setForegroundNotificationPresentation invoke: '
-        'alert=$alert',
-      );
-      await _channel.invokeMethod<void>(_setForegroundPresentationMethod, {
-        'alert': alert,
-      });
     } on PlatformException catch (e) {
       throw WnsPlatformException.fromPlatformException(e);
     } catch (e, stack) {

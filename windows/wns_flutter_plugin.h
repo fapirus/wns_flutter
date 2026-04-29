@@ -56,7 +56,6 @@ class WnsFlutterPlugin : public flutter::Plugin {
   flutter::PluginRegistrarWindows* registrar_;
   HWND main_window_ = nullptr;
   int window_proc_delegate_id_ = 0;
-  bool foreground_alert_ = true;
 
   std::unique_ptr<EventSink> message_sink_;
   std::unique_ptr<EventSink> message_opened_app_sink_;

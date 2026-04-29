@@ -29,7 +29,6 @@ class WnsExampleController extends ChangeNotifier {
   bool? _channelIsExpired;
   WnsActivation? _initialActivation;
   DateTime? _initialActivationCheckedAt;
-  bool _foregroundAlert = true;
   WnsNotificationSettingsInfo? _notificationSettingsInfo;
   final List<WnsEventLogEntry> _eventLogs = <WnsEventLogEntry>[];
 
@@ -39,7 +38,6 @@ class WnsExampleController extends ChangeNotifier {
   bool? get channelIsExpired => _channelIsExpired;
   WnsActivation? get initialActivation => _initialActivation;
   DateTime? get initialActivationCheckedAt => _initialActivationCheckedAt;
-  bool get foregroundAlert => _foregroundAlert;
   WnsNotificationSettingsInfo? get notificationSettingsInfo =>
       _notificationSettingsInfo;
   List<WnsEventLogEntry> get eventLogs => List<WnsEventLogEntry>.unmodifiable(
@@ -80,12 +78,6 @@ class WnsExampleController extends ChangeNotifier {
   Future<void> refreshInitialActivation() async {
     _initialActivation = await _client.getInitialActivation();
     _initialActivationCheckedAt = _now();
-    notifyListeners();
-  }
-
-  Future<void> setForegroundAlert(bool value) async {
-    await _client.setForegroundNotificationPresentation(alert: value);
-    _foregroundAlert = value;
     notifyListeners();
   }
 

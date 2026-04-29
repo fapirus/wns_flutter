@@ -31,14 +31,6 @@ class WindowsNotificationService {
     return _wnsNotificationService.getChannelUri();
   }
 
-  Future<void> setForegroundNotificationPresentation({
-    required bool alert,
-  }) {
-    return _wnsNotificationService.setForegroundNotificationPresentation(
-      alert: alert,
-    );
-  }
-
   Future<WindowsNotificationActivation?> getInitialMessage() {
     return _wnsNotificationService.getInitialMessage();
   }

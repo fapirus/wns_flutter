@@ -11,8 +11,6 @@ abstract class WnsDemoClient {
 
   Future<void> closeChannel();
 
-  Future<void> setForegroundNotificationPresentation({required bool alert});
-
   Future<WnsActivation?> getInitialActivation();
 
   Stream<WnsMessage> get onMessage;
@@ -24,16 +22,13 @@ class DefaultWnsDemoClient implements WnsDemoClient {
   DefaultWnsDemoClient({
     WnsClient? client,
     WnsNotificationSettings? settings,
-    WindowsNotificationService? legacyService,
   }) : _client =
            client ??
            const WnsClientBuilder().create(const PartnerCenterWnsOptions()),
-       _settings = settings ?? WnsNotificationSettings(),
-       _legacyService = legacyService ?? WindowsNotificationService.instance;
+       _settings = settings ?? WnsNotificationSettings();
 
   final WnsClient _client;
   final WnsNotificationSettings _settings;
-  final WindowsNotificationService _legacyService;
 
   @override
   Future<void> initialize() {
@@ -58,11 +53,6 @@ class DefaultWnsDemoClient implements WnsDemoClient {
   @override
   Future<void> closeChannel() {
     return _client.closeChannel();
-  }
-
-  @override
-  Future<void> setForegroundNotificationPresentation({required bool alert}) {
-    return _legacyService.setForegroundNotificationPresentation(alert: alert);
   }
 
   @override

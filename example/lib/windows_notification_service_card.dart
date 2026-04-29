@@ -200,35 +200,10 @@ class _ControlsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SectionPanel(
       title: 'Controls',
-      subtitle: 'Trigger lifecycle reads and adjust foreground presentation.',
+      subtitle: 'Trigger lifecycle reads and channel operations.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: SwitchListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 4,
-              ),
-              title: const Text('Show foreground toast'),
-              subtitle: const Text(
-                'Keep the native foreground toast banner visible while app events are streamed.',
-              ),
-              value: controller.foregroundAlert,
-              onChanged: (value) async {
-                try {
-                  await controller.setForegroundAlert(value);
-                } catch (error) {
-                  await onError(error);
-                }
-              },
-            ),
-          ),
-          const SizedBox(height: 14),
           FilledButton.icon(
             onPressed: () async {
               try {

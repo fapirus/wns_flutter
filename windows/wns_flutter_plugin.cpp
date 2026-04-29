@@ -375,11 +375,6 @@ void WnsFlutterPlugin::AttachPushNotificationHandler() {
           return;
         }
 
-        if (!foreground_alert_) {
-          LogDebug(L"PushNotificationReceived cancelling foreground toast");
-          event_args.Cancel(true);
-        }
-
         try {
           QueueMessageEvent(BuildIncomingMessagePayload(
               event_args.ToastNotification()));
@@ -685,36 +680,6 @@ void WnsFlutterPlugin::HandleMethodCall(
 
     LogDebug(L"getInitialMessage succeeded: payload");
     result->Success(flutter::EncodableValue(*payload));
-  } else if (method_call.method_name().compare(
-                 "setForegroundNotificationPresentation") == 0) {
-    LogDebug(L"HandleMethodCall setForegroundNotificationPresentation");
-    const auto* arguments =
-        std::get_if<flutter::EncodableMap>(method_call.arguments());
-    if (arguments == nullptr) {
-      LogDebug(L"setForegroundNotificationPresentation failed: invalid args");
-      result->Error("INVALID_ARGUMENTS",
-                    "Expected a map with an alert flag.");
-      return;
-    }
-
-    const auto iterator = arguments->find(flutter::EncodableValue("alert"));
-    if (iterator == arguments->end()) {
-      LogDebug(L"setForegroundNotificationPresentation failed: missing alert");
-      result->Error("INVALID_ARGUMENTS",
-                    "Expected an alert flag in the argument map.");
-      return;
-    }
-
-    const auto* alert = std::get_if<bool>(&iterator->second);
-    if (alert == nullptr) {
-      LogDebug(L"setForegroundNotificationPresentation failed: alert type");
-      result->Error("INVALID_ARGUMENTS", "Alert flag must be a boolean.");
-      return;
-    }
-
-    foreground_alert_ = *alert;
-    LogDebug(L"setForegroundNotificationPresentation succeeded");
-    result->Success();
   } else if (method_call.method_name().compare("openNotificationSettingPage") ==
              0) {
     LogDebug(L"HandleMethodCall openNotificationSettingPage");
