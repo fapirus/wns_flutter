@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:wns_flutter/src/exception/exception.dart';
+import 'package:wns_flutter/src/internal/wns_logger.dart';
 import 'package:wns_flutter/src/model/notification_setting.dart';
 
 class SettingService {
@@ -9,6 +10,7 @@ class SettingService {
 
   Future<WnsNotificationStatus> getNotificationSettingStatus() async {
     try {
+      wnsDebugLog('SettingService.getNotificationSettingStatus invoke');
       final int result = await _channel.invokeMethod(
         'getNotificationSettingStatus',
       );
@@ -22,6 +24,7 @@ class SettingService {
 
   Future<void> openNotificationSettingPage() async {
     try {
+      wnsDebugLog('SettingService.openNotificationSettingPage invoke');
       await _channel.invokeMethod('openNotificationSettingPage');
     } on PlatformException catch (e) {
       throw WnsPlatformException.fromPlatformException(e);

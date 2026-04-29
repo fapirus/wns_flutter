@@ -35,6 +35,14 @@ constexpr wchar_t kActivationForwardWindowMessageName[] =
 constexpr ULONG_PTR kActivationCopyDataSignature = 0x574E5346;  // WNSF
 constexpr UINT kDispatchMessageEvent = WM_APP + 101;
 
+void LogDebug(const std::wstring& message) {
+  ::OutputDebugStringW((L"[wns_flutter] " + message + L"\n").c_str());
+}
+
+void LogDebug(const wchar_t* message) {
+  LogDebug(std::wstring(message));
+}
+
 bool HasPackageIdentity() {
   UINT32 length = 0;
   const LONG rc = GetCurrentPackageFullName(&length, nullptr);
@@ -305,6 +313,7 @@ void WnsFlutterPlugin::FlushPendingMessageEvents() {
   }
 
   for (const auto& payload : pending_events) {
+    LogDebug(L"FlushPendingMessageEvents dispatching event");
     message_sink_->Success(flutter::EncodableValue(payload));
   }
 }
@@ -321,11 +330,13 @@ void WnsFlutterPlugin::FlushPendingActivationEvents() {
   }
 
   for (const auto& payload : pending_events) {
+    LogDebug(L"FlushPendingActivationEvents dispatching event");
     message_opened_app_sink_->Success(flutter::EncodableValue(payload));
   }
 }
 
 void WnsFlutterPlugin::QueueMessageEvent(EncodableMap payload) {
+  LogDebug(L"QueueMessageEvent queued foreground notification");
   {
     std::lock_guard<std::mutex> lock(pending_events_mutex_);
     pending_message_events_.push_back(std::move(payload));
@@ -337,6 +348,7 @@ void WnsFlutterPlugin::QueueMessageEvent(EncodableMap payload) {
 }
 
 void WnsFlutterPlugin::QueueOpenedAppEvent(EncodableMap payload) {
+  LogDebug(L"QueueOpenedAppEvent received activation");
   if (message_opened_app_sink_) {
     message_opened_app_sink_->Success(flutter::EncodableValue(payload));
     return;
@@ -348,18 +360,23 @@ void WnsFlutterPlugin::QueueOpenedAppEvent(EncodableMap payload) {
 
 void WnsFlutterPlugin::AttachPushNotificationHandler() {
   if (!push_channel_) {
+    LogDebug(L"AttachPushNotificationHandler skipped: no push channel");
     return;
   }
 
+  LogDebug(L"AttachPushNotificationHandler registering handler");
   TearDownPushNotificationHandler();
   push_received_token_ = push_channel_.PushNotificationReceived(
       [this](const auto& sender, const auto& event_args) {
+        LogDebug(L"PushNotificationReceived invoked");
         if (event_args.NotificationType() !=
             Windows::Networking::PushNotifications::PushNotificationType::Toast) {
+          LogDebug(L"PushNotificationReceived ignored non-toast notification");
           return;
         }
 
         if (!foreground_alert_) {
+          LogDebug(L"PushNotificationReceived cancelling foreground toast");
           event_args.Cancel(true);
         }
 
@@ -374,6 +391,7 @@ void WnsFlutterPlugin::AttachPushNotificationHandler() {
 
 void WnsFlutterPlugin::TearDownPushNotificationHandler() {
   if (push_channel_ && has_push_received_handler_) {
+    LogDebug(L"TearDownPushNotificationHandler unregistering handler");
     push_channel_.PushNotificationReceived(push_received_token_);
   }
   has_push_received_handler_ = false;
@@ -410,9 +428,11 @@ std::optional<LRESULT> WnsFlutterPlugin::HandleWindowProc(
 std::optional<WnsFlutterPlugin::EncodableMap>
 WnsFlutterPlugin::ConsumeInitialActivation() {
   if (!initial_activation_payload_.has_value()) {
+    LogDebug(L"ConsumeInitialActivation empty");
     return std::nullopt;
   }
 
+  LogDebug(L"ConsumeInitialActivation returning payload");
   auto payload = initial_activation_payload_;
   initial_activation_payload_.reset();
   return payload;
@@ -421,14 +441,17 @@ WnsFlutterPlugin::ConsumeInitialActivation() {
 std::optional<WnsFlutterPlugin::EncodableMap>
 WnsFlutterPlugin::BuildActivationFromCommandLine() const {
   if (!HasPackageIdentity()) {
+    LogDebug(L"BuildActivationFromCommandLine skipped: no package identity");
     return std::nullopt;
   }
 
   std::wstring arguments = JoinCommandLineArguments();
   if (arguments.empty()) {
+    LogDebug(L"BuildActivationFromCommandLine skipped: no arguments");
     return std::nullopt;
   }
 
+  LogDebug(L"BuildActivationFromCommandLine captured activation arguments");
   return BuildActivationPayload(arguments);
 }
 
@@ -446,6 +469,7 @@ bool WnsFlutterPlugin::ForwardActivationToRunningInstance(
 
   HWND target_window = FindRunningInstanceWindow();
   if (target_window == nullptr) {
+    LogDebug(L"ForwardActivationToRunningInstance skipped: no target window");
     return false;
   }
 
@@ -459,6 +483,8 @@ bool WnsFlutterPlugin::ForwardActivationToRunningInstance(
   const auto result = ::SendMessage(target_window, WM_COPYDATA,
                                     reinterpret_cast<WPARAM>(main_window_),
                                     reinterpret_cast<LPARAM>(&copy_data));
+  LogDebug(result == TRUE ? L"ForwardActivationToRunningInstance succeeded"
+                          : L"ForwardActivationToRunningInstance failed");
   return result == TRUE;
 }
 
@@ -499,23 +525,30 @@ void WnsFlutterPlugin::HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue>& method_call,
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
   if (method_call.method_name().compare("initialize") == 0) {
+    LogDebug(L"HandleMethodCall initialize");
     if (!HasPackageIdentity()) {
+      LogDebug(L"initialize failed: no package identity");
       NotPackagedError(std::move(result));
       return;
     }
 
+    LogDebug(L"initialize succeeded");
     result->Success();
   } else if (method_call.method_name().compare(
                  "getNotificationSettingStatus") == 0) {
+    LogDebug(L"HandleMethodCall getNotificationSettingStatus");
     if (!HasPackageIdentity()) {
+      LogDebug(L"getNotificationSettingStatus failed: no package identity");
       NotPackagedError(std::move(result));
       return;
     }
     try {
       ToastNotifier notifier = ToastNotificationManager::CreateToastNotifier();
       auto setting = notifier.Setting();
+      LogDebug(L"getNotificationSettingStatus succeeded");
       result->Success(flutter::EncodableValue((int)setting));
     } catch (const hresult_error& ex) {
+      LogDebug(L"getNotificationSettingStatus failed: WinRT error");
       std::ostringstream error_msg;
       error_msg << "HRESULT: 0x" << std::hex << ex.code() << ": "
                 << winrt::to_string(ex.message());
@@ -527,11 +560,14 @@ void WnsFlutterPlugin::HandleMethodCall(
       result->Error("WINRT_ERROR", "Failed to get notification setting.",
                     flutter::EncodableValue(error_msg.str()));
     } catch (...) {
+      LogDebug(L"getNotificationSettingStatus failed: unknown error");
       result->Error("UNKNOWN_ERROR",
                     "Unknown error getting notification setting.");
     }
   } else if (method_call.method_name().compare("getChannelUri") == 0) {
+    LogDebug(L"HandleMethodCall getChannelUri");
     if (!HasPackageIdentity()) {
+      LogDebug(L"getChannelUri failed: no package identity");
       NotPackagedError(std::move(result));
       return;
     }
@@ -540,6 +576,7 @@ void WnsFlutterPlugin::HandleMethodCall(
         shared_result = std::move(result);
 
     try {
+      LogDebug(L"getChannelUri starting channel request");
       auto operation =
           Windows::Networking::PushNotifications::PushNotificationChannelManager::
               CreatePushNotificationChannelForApplicationAsync();
@@ -547,6 +584,7 @@ void WnsFlutterPlugin::HandleMethodCall(
       operation.Completed(
           [shared_result, this](const auto& async_info, const auto& status) {
             if (status == AsyncStatus::Completed) {
+              LogDebug(L"getChannelUri async completed");
               try {
                 push_channel_ = async_info.GetResults();
                 AttachPushNotificationHandler();
@@ -566,12 +604,15 @@ void WnsFlutterPlugin::HandleMethodCall(
                 response[flutter::EncodableValue("expirationTime")] =
                     flutter::EncodableValue(expiration_millis);
 
+                LogDebug(L"getChannelUri succeeded");
                 shared_result->Success(flutter::EncodableValue(response));
               } catch (...) {
+                LogDebug(L"getChannelUri failed: result conversion error");
                 shared_result->Error("CHANNEL_ERROR",
                                      "Failed to retrieve channel results.");
               }
             } else if (status == AsyncStatus::Error) {
+              LogDebug(L"getChannelUri async failed");
               std::ostringstream error_msg;
               error_msg << "Async operation failed with status: "
                         << (int)status << ". HRESULT: 0x" << std::hex
@@ -587,12 +628,14 @@ void WnsFlutterPlugin::HandleMethodCall(
                   "Failed to create push notification channel.",
                   flutter::EncodableValue(error_msg.str()));
             } else {
+              LogDebug(L"getChannelUri async cancelled or incomplete");
               shared_result->Error(
                   "CHANNEL_ERROR",
                   "Async operation cancelled or not completed.");
             }
           });
     } catch (const hresult_error& ex) {
+      LogDebug(L"getChannelUri failed to initiate: WinRT error");
       std::ostringstream error_msg;
       error_msg << "HRESULT: 0x" << std::hex << ex.code() << ": "
                 << winrt::to_string(ex.message());
@@ -600,16 +643,20 @@ void WnsFlutterPlugin::HandleMethodCall(
           "CHANNEL_ERROR", "Failed to initiate channel creation.",
           flutter::EncodableValue(error_msg.str()));
     } catch (...) {
+      LogDebug(L"getChannelUri failed to initiate: unknown error");
       shared_result->Error("UNKNOWN_ERROR",
                            "Unknown error initiating channel creation.");
     }
   } else if (method_call.method_name().compare("closeChannel") == 0) {
+    LogDebug(L"HandleMethodCall closeChannel");
     if (push_channel_) {
       try {
+        LogDebug(L"closeChannel closing active channel");
         TearDownPushNotificationHandler();
         push_channel_.Close();
         push_channel_ = nullptr;
       } catch (const hresult_error& ex) {
+        LogDebug(L"closeChannel failed: WinRT error");
         std::ostringstream error_msg;
         error_msg << "HRESULT: 0x" << std::hex << ex.code() << ": "
                   << winrt::to_string(ex.message());
@@ -618,26 +665,33 @@ void WnsFlutterPlugin::HandleMethodCall(
                       flutter::EncodableValue(error_msg.str()));
         return;
       } catch (...) {
+        LogDebug(L"closeChannel failed: unknown error");
         result->Error("UNKNOWN_ERROR",
                       "Unknown error closing push notification channel.");
         return;
       }
     }
 
+    LogDebug(L"closeChannel succeeded");
     result->Success();
   } else if (method_call.method_name().compare("getInitialMessage") == 0) {
+    LogDebug(L"HandleMethodCall getInitialMessage");
     auto payload = ConsumeInitialActivation();
     if (!payload.has_value()) {
+      LogDebug(L"getInitialMessage succeeded: empty");
       result->Success();
       return;
     }
 
+    LogDebug(L"getInitialMessage succeeded: payload");
     result->Success(flutter::EncodableValue(*payload));
   } else if (method_call.method_name().compare(
                  "setForegroundNotificationPresentation") == 0) {
+    LogDebug(L"HandleMethodCall setForegroundNotificationPresentation");
     const auto* arguments =
         std::get_if<flutter::EncodableMap>(method_call.arguments());
     if (arguments == nullptr) {
+      LogDebug(L"setForegroundNotificationPresentation failed: invalid args");
       result->Error("INVALID_ARGUMENTS",
                     "Expected a map with an alert flag.");
       return;
@@ -645,6 +699,7 @@ void WnsFlutterPlugin::HandleMethodCall(
 
     const auto iterator = arguments->find(flutter::EncodableValue("alert"));
     if (iterator == arguments->end()) {
+      LogDebug(L"setForegroundNotificationPresentation failed: missing alert");
       result->Error("INVALID_ARGUMENTS",
                     "Expected an alert flag in the argument map.");
       return;
@@ -652,16 +707,20 @@ void WnsFlutterPlugin::HandleMethodCall(
 
     const auto* alert = std::get_if<bool>(&iterator->second);
     if (alert == nullptr) {
+      LogDebug(L"setForegroundNotificationPresentation failed: alert type");
       result->Error("INVALID_ARGUMENTS", "Alert flag must be a boolean.");
       return;
     }
 
     foreground_alert_ = *alert;
+    LogDebug(L"setForegroundNotificationPresentation succeeded");
     result->Success();
   } else if (method_call.method_name().compare("openNotificationSettingPage") ==
              0) {
+    LogDebug(L"HandleMethodCall openNotificationSettingPage");
     LaunchSettingsAsync(std::move(result));
   } else {
+    LogDebug(L"HandleMethodCall not implemented");
     result->NotImplemented();
   }
 }

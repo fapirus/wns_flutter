@@ -1,5 +1,6 @@
 import 'package:wns_flutter/src/core/wns_platform_adapter.dart';
 import 'package:wns_flutter/src/exception/exception.dart';
+import 'package:wns_flutter/src/internal/wns_logger.dart';
 import 'package:wns_flutter/src/model/wns_activation.dart';
 import 'package:wns_flutter/src/model/wns_channel.dart';
 
@@ -19,11 +20,14 @@ class WnsLifecycleManager {
     _ensureNotDisposed();
 
     if (_initialized) {
+      wnsDebugLog('WnsLifecycleManager.initialize skipped: already initialized');
       return;
     }
 
+    wnsDebugLog('WnsLifecycleManager.initialize adapter call started');
     await _adapter.initialize();
     _initialized = true;
+    wnsDebugLog('WnsLifecycleManager.initialize completed');
   }
 
   Future<WnsChannel> requestChannel() async {
@@ -43,24 +47,29 @@ class WnsLifecycleManager {
 
   Future<void> dispose() async {
     if (_disposed) {
+      wnsDebugLog('WnsLifecycleManager.dispose skipped: already disposed');
       return;
     }
 
+    wnsDebugLog('WnsLifecycleManager.dispose adapter call started');
     _disposed = true;
     _initialized = false;
     await _adapter.dispose();
+    wnsDebugLog('WnsLifecycleManager.dispose completed');
   }
 
   void _ensureReady() {
     _ensureNotDisposed();
 
     if (!_initialized) {
+      wnsDebugLog('WnsLifecycleManager guard failed: not initialized');
       throw const WnsNotInitializedException();
     }
   }
 
   void _ensureNotDisposed() {
     if (_disposed) {
+      wnsDebugLog('WnsLifecycleManager guard failed: disposed');
       throw const WnsDisposedException();
     }
   }

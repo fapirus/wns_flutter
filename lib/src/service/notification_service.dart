@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:wns_flutter/src/exception/exception.dart';
+import 'package:wns_flutter/src/internal/wns_logger.dart';
 
 import '../model/channel_uri.dart';
 import '../model/notification.dart';
@@ -41,6 +42,7 @@ class NotificationService {
 
   Future<void> initializePartnerCenter({String? appUserModelId}) async {
     try {
+      wnsDebugLog('NotificationService.initializePartnerCenter invoke');
       final arguments = <String, Object?>{};
       if (appUserModelId != null) {
         arguments['appUserModelId'] = appUserModelId;
@@ -56,6 +58,7 @@ class NotificationService {
 
   Future<ChannelUri> getChannelUri() async {
     try {
+      wnsDebugLog('NotificationService.getChannelUri invoke');
       final Map<Object?, Object?> result = await _channel.invokeMethod(
         _getChannelUriMethod,
       );
@@ -76,6 +79,7 @@ class NotificationService {
 
   Future<void> closeChannel() async {
     try {
+      wnsDebugLog('NotificationService.closeChannel invoke');
       await _channel.invokeMethod<void>(_closeChannelMethod);
     } on PlatformException catch (e) {
       throw WnsPlatformException.fromPlatformException(e);
@@ -88,6 +92,10 @@ class NotificationService {
     required bool alert,
   }) async {
     try {
+      wnsDebugLog(
+        'NotificationService.setForegroundNotificationPresentation invoke: '
+        'alert=$alert',
+      );
       await _channel.invokeMethod<void>(_setForegroundPresentationMethod, {
         'alert': alert,
       });
@@ -100,6 +108,7 @@ class NotificationService {
 
   Future<WindowsNotificationActivation?> getInitialMessage() async {
     try {
+      wnsDebugLog('NotificationService.getInitialMessage invoke');
       final result = await _channel.invokeMethod<Object?>(
         _getInitialMessageMethod,
       );

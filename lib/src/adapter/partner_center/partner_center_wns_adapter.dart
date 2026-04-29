@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:wns_flutter/src/config/partner_center_wns_options.dart';
 import 'package:wns_flutter/src/core/wns_platform_adapter.dart';
+import 'package:wns_flutter/src/internal/wns_logger.dart';
 import 'package:wns_flutter/src/model/channel_uri.dart';
 import 'package:wns_flutter/src/model/notification.dart';
 import 'package:wns_flutter/src/model/wns_activation.dart';
@@ -39,6 +40,7 @@ class PartnerCenterWnsAdapter implements WnsPlatformAdapter {
 
   @override
   Future<void> initialize() {
+    wnsDebugLog('PartnerCenterWnsAdapter.initialize started');
     return _notificationService.initializePartnerCenter(
       appUserModelId: _options.appUserModelId,
     );
@@ -46,26 +48,37 @@ class PartnerCenterWnsAdapter implements WnsPlatformAdapter {
 
   @override
   Future<WnsChannel> requestChannel() async {
-    return _toWnsChannel(await _notificationService.getChannelUri());
+    wnsDebugLog('PartnerCenterWnsAdapter.requestChannel started');
+    final channel = _toWnsChannel(await _notificationService.getChannelUri());
+    wnsDebugLog(
+      'PartnerCenterWnsAdapter.requestChannel completed: '
+      'expires=${channel.expirationTime.toIso8601String()}',
+    );
+    return channel;
   }
 
   @override
   Future<void> closeChannel() {
+    wnsDebugLog('PartnerCenterWnsAdapter.closeChannel started');
     return _notificationService.closeChannel();
   }
 
   @override
   Future<WnsActivation?> getInitialActivation() async {
+    wnsDebugLog('PartnerCenterWnsAdapter.getInitialActivation started');
     final activation = await _notificationService.getInitialMessage();
     if (activation == null) {
+      wnsDebugLog('PartnerCenterWnsAdapter.getInitialActivation empty');
       return null;
     }
 
+    wnsDebugLog('PartnerCenterWnsAdapter.getInitialActivation completed');
     return _toWnsActivation(activation, kind: WnsActivationKind.launch);
   }
 
   @override
   Future<void> dispose() {
+    wnsDebugLog('PartnerCenterWnsAdapter.dispose started');
     return closeChannel();
   }
 
