@@ -261,12 +261,68 @@ class WnsNativeCallException extends WnsException {
 class WnsUnknownException extends WnsException {
   const WnsUnknownException({
     String message = 'An unknown error occurred.',
+    super.code,
     super.stackTrace,
     super.details,
   }) : super(
          message,
          recoveryHint: WnsRecoveryHint.reportBug,
        );
+}
+
+WnsException wnsExceptionFromPlatformException(PlatformException e) {
+  final stackTrace = e.stacktrace != null
+      ? StackTrace.fromString(e.stacktrace!)
+      : null;
+  final message = e.message ?? 'Unknown platform error';
+
+  return switch (e.code) {
+    'IDENTITY_NOT_FOUND' => WnsPackageIdentityNotFoundException(
+      message: message,
+      code: e.code,
+      details: e.details,
+      stackTrace: stackTrace,
+    ),
+    'CHANNEL_REQUEST_FAILED' ||
+    'CHANNEL_REQUEST_CANCELLED' ||
+    'CHANNEL_RESULT_INVALID' => WnsChannelRequestException(
+      message: message,
+      code: e.code,
+      details: e.details,
+      stackTrace: stackTrace,
+    ),
+    'CHANNEL_CLOSE_FAILED' => WnsChannelClosedException(
+      message: message,
+      code: e.code,
+      details: e.details,
+      stackTrace: stackTrace,
+    ),
+    'NOTIFICATION_SETTING_FAILED' =>
+      WnsNotificationSettingUnavailableException(
+        message: message,
+        code: e.code,
+        details: e.details,
+        stackTrace: stackTrace,
+      ),
+    'SETTINGS_LAUNCH_FAILED' => WnsSettingsLaunchException(
+      message: message,
+      code: e.code,
+      details: e.details,
+      stackTrace: stackTrace,
+    ),
+    'UNKNOWN_ERROR' => WnsUnknownException(
+      message: message,
+      code: e.code,
+      details: e.details,
+      stackTrace: stackTrace,
+    ),
+    _ => WnsNativeCallException(
+      message: message,
+      code: e.code,
+      details: e.details,
+      stackTrace: stackTrace,
+    ),
+  };
 }
 
 /// Wraps platform-specific exceptions (e.g. from MethodChannel).

@@ -550,11 +550,11 @@ winrt::fire_and_forget LaunchSettingsAsync(
     if (success) {
       result->Success();
     } else {
-      result->Error("LAUNCH_FAILED",
+      result->Error("SETTINGS_LAUNCH_FAILED",
                     "Failed to launch notification settings.");
     }
   } catch (const hresult_error& ex) {
-    result->Error("LAUNCH_ERROR", "Error launching settings.",
+    result->Error("SETTINGS_LAUNCH_FAILED", "Error launching settings.",
                   flutter::EncodableValue((std::string)to_string(ex.message())));
   } catch (...) {
     result->Error("UNKNOWN_ERROR", "Unknown error launching settings.");
@@ -597,7 +597,8 @@ void WnsFlutterPlugin::HandleMethodCall(
         error_msg << " (Hint: Package identity not found. Register the app as MSIX before running.)";
       }
 
-      result->Error("WINRT_ERROR", "Failed to get notification setting.",
+      result->Error("NOTIFICATION_SETTING_FAILED",
+                    "Failed to get notification setting.",
                     flutter::EncodableValue(error_msg.str()));
     } catch (...) {
       LogDebug(L"getNotificationSettingStatus failed: unknown error");
@@ -648,7 +649,7 @@ void WnsFlutterPlugin::HandleMethodCall(
                 shared_result->Success(flutter::EncodableValue(response));
               } catch (...) {
                 LogDebug(L"getChannelUri failed: result conversion error");
-                shared_result->Error("CHANNEL_ERROR",
+                shared_result->Error("CHANNEL_RESULT_INVALID",
                                      "Failed to retrieve channel results.");
               }
             } else if (status == AsyncStatus::Error) {
@@ -664,13 +665,13 @@ void WnsFlutterPlugin::HandleMethodCall(
               }
 
               shared_result->Error(
-                  "CHANNEL_ERROR",
+                  "CHANNEL_REQUEST_FAILED",
                   "Failed to create push notification channel.",
                   flutter::EncodableValue(error_msg.str()));
             } else {
               LogDebug(L"getChannelUri async cancelled or incomplete");
               shared_result->Error(
-                  "CHANNEL_ERROR",
+                  "CHANNEL_REQUEST_CANCELLED",
                   "Async operation cancelled or not completed.");
             }
           });
@@ -680,7 +681,7 @@ void WnsFlutterPlugin::HandleMethodCall(
       error_msg << "HRESULT: 0x" << std::hex << ex.code() << ": "
                 << winrt::to_string(ex.message());
       shared_result->Error(
-          "CHANNEL_ERROR", "Failed to initiate channel creation.",
+          "CHANNEL_REQUEST_FAILED", "Failed to initiate channel creation.",
           flutter::EncodableValue(error_msg.str()));
     } catch (...) {
       LogDebug(L"getChannelUri failed to initiate: unknown error");
@@ -700,7 +701,7 @@ void WnsFlutterPlugin::HandleMethodCall(
         std::ostringstream error_msg;
         error_msg << "HRESULT: 0x" << std::hex << ex.code() << ": "
                   << winrt::to_string(ex.message());
-        result->Error("CHANNEL_CLOSE_ERROR",
+        result->Error("CHANNEL_CLOSE_FAILED",
                       "Failed to close push notification channel.",
                       flutter::EncodableValue(error_msg.str()));
         return;

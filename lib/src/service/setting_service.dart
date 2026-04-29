@@ -16,7 +16,7 @@ class SettingService {
       );
       return _mapToNotificationStatus(result);
     } on PlatformException catch (e) {
-      throw WnsPlatformException.fromPlatformException(e);
+      throw wnsExceptionFromPlatformException(e);
     } catch (e, stack) {
       throw WnsUnknownException(message: e.toString(), stackTrace: stack);
     }
@@ -27,7 +27,7 @@ class SettingService {
       wnsDebugLog('SettingService.openNotificationSettingPage invoke');
       await _channel.invokeMethod('openNotificationSettingPage');
     } on PlatformException catch (e) {
-      throw WnsPlatformException.fromPlatformException(e);
+      throw wnsExceptionFromPlatformException(e);
     } catch (e, stack) {
       throw WnsUnknownException(message: e.toString(), stackTrace: stack);
     }

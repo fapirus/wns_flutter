@@ -53,7 +53,7 @@ class NotificationService {
 
       await _channel.invokeMethod<void>(_initializeMethod, arguments);
     } on PlatformException catch (e) {
-      throw WnsPlatformException.fromPlatformException(e);
+      throw wnsExceptionFromPlatformException(e);
     } catch (e, stack) {
       throw WnsUnknownException(message: e.toString(), stackTrace: stack);
     }
@@ -74,7 +74,7 @@ class NotificationService {
         expirationTime: DateTime.fromMillisecondsSinceEpoch(expirationMillis),
       );
     } on PlatformException catch (e) {
-      throw WnsPlatformException.fromPlatformException(e);
+      throw wnsExceptionFromPlatformException(e);
     } catch (e, stack) {
       throw WnsUnknownException(message: e.toString(), stackTrace: stack);
     }
@@ -85,7 +85,7 @@ class NotificationService {
       wnsDebugLog('NotificationService.closeChannel invoke');
       await _channel.invokeMethod<void>(_closeChannelMethod);
     } on PlatformException catch (e) {
-      throw WnsPlatformException.fromPlatformException(e);
+      throw wnsExceptionFromPlatformException(e);
     } catch (e, stack) {
       throw WnsUnknownException(message: e.toString(), stackTrace: stack);
     }
@@ -107,7 +107,7 @@ class NotificationService {
         fallbackKind: WnsActivationKind.launch,
       );
     } on PlatformException catch (e) {
-      throw WnsPlatformException.fromPlatformException(e);
+      throw wnsExceptionFromPlatformException(e);
     } on WnsException {
       rethrow;
     } catch (e, stack) {

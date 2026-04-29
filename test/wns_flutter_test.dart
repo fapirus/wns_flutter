@@ -112,6 +112,67 @@ void main() {
       );
     });
 
+    test('maps native channel request failures to typed exceptions', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            if (call.method == 'getChannelUri') {
+              throw PlatformException(
+                code: 'CHANNEL_REQUEST_FAILED',
+                message: 'Failed to create push notification channel.',
+                details: 'HRESULT: 0x80070490',
+              );
+            }
+
+            return null;
+          });
+
+      final service = NotificationService(channel);
+
+      await expectLater(
+        service.requestChannel(),
+        throwsA(
+          isA<WnsChannelRequestException>()
+              .having(
+                (value) => value.code,
+                'code',
+                'CHANNEL_REQUEST_FAILED',
+              )
+              .having(
+                (value) => value.details,
+                'details',
+                contains('0x80070490'),
+              ),
+        ),
+      );
+    });
+
+    test('maps package identity failures to typed exceptions', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            if (call.method == 'initialize') {
+              throw PlatformException(
+                code: 'IDENTITY_NOT_FOUND',
+                message: 'Windows package identity is required.',
+              );
+            }
+
+            return null;
+          });
+
+      final service = NotificationService(channel);
+
+      await expectLater(
+        service.initializePartnerCenter(),
+        throwsA(
+          isA<WnsPackageIdentityNotFoundException>().having(
+            (value) => value.code,
+            'code',
+            'IDENTITY_NOT_FOUND',
+          ),
+        ),
+      );
+    });
+
     test('returns null when there is no initial activation', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {

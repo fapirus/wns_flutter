@@ -7,7 +7,7 @@ void main() {
     test('formats typed WNS exceptions for service validation', () {
       const exception = WnsChannelRequestException(
         message: 'Channel failed',
-        code: 'CHANNEL_ERROR',
+        code: 'CHANNEL_REQUEST_FAILED',
         details: 'HRESULT: 0x80070490',
       );
 
@@ -15,10 +15,10 @@ void main() {
 
       expect(details.title, 'WnsChannelRequestException');
       expect(details.message, 'Channel failed');
-      expect(details.code, 'CHANNEL_ERROR');
+      expect(details.code, 'CHANNEL_REQUEST_FAILED');
       expect(details.recoveryHint, WnsRecoveryHint.retryLater.name);
       expect(details.details, 'HRESULT: 0x80070490');
-      expect(details.raw, contains('CHANNEL_ERROR'));
+      expect(details.raw, contains('CHANNEL_REQUEST_FAILED'));
     });
 
     test('formats non-WNS errors without typed fields', () {
