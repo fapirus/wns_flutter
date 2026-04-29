@@ -106,10 +106,22 @@ std::wstring JoinCommandLineArguments() {
 
 flutter::EncodableMap BuildActivationPayload(const std::wstring& arguments) {
   flutter::EncodableMap payload;
+  payload[flutter::EncodableValue("type")] = flutter::EncodableValue("toast");
+  payload[flutter::EncodableValue("kind")] = flutter::EncodableValue("launch");
   payload[flutter::EncodableValue("arguments")] =
       flutter::EncodableValue(WideToUtf8(arguments));
-  payload[flutter::EncodableValue("rawPayload")] =
+  payload[flutter::EncodableValue("rawText")] =
       flutter::EncodableValue(WideToUtf8(arguments));
+  payload[flutter::EncodableValue("data")] =
+      flutter::EncodableValue(flutter::EncodableMap());
+  return payload;
+}
+
+flutter::EncodableMap BuildForwardedActivationPayload(
+    const std::wstring& arguments) {
+  auto payload = BuildActivationPayload(arguments);
+  payload[flutter::EncodableValue("kind")] =
+      flutter::EncodableValue("foregroundForward");
   return payload;
 }
 
@@ -200,14 +212,52 @@ std::string GetToastXml(const ToastNotification& toast) {
 }
 
 flutter::EncodableMap BuildIncomingMessagePayload(
-    const ToastNotification& toast) {
+    const Windows::Networking::PushNotifications::PushNotificationReceivedEventArgs&
+        event_args) {
+  using Windows::Networking::PushNotifications::PushNotificationType;
+
   flutter::EncodableMap payload;
-  payload[flutter::EncodableValue("arguments")] =
-      flutter::EncodableValue(GetToastLaunchArguments(toast));
-  payload[flutter::EncodableValue("rawPayload")] =
-      flutter::EncodableValue(GetToastXml(toast));
+  payload[flutter::EncodableValue("source")] =
+      flutter::EncodableValue("foreground");
+  payload[flutter::EncodableValue("arguments")] = flutter::EncodableValue("");
+  payload[flutter::EncodableValue("data")] =
+      flutter::EncodableValue(flutter::EncodableMap());
   payload[flutter::EncodableValue("receivedAt")] =
       flutter::EncodableValue(CurrentEpochMillis());
+
+  switch (event_args.NotificationType()) {
+    case PushNotificationType::Toast: {
+      auto toast = event_args.ToastNotification();
+      payload[flutter::EncodableValue("type")] =
+          flutter::EncodableValue("toast");
+      payload[flutter::EncodableValue("arguments")] =
+          flutter::EncodableValue(GetToastLaunchArguments(toast));
+      payload[flutter::EncodableValue("xml")] =
+          flutter::EncodableValue(GetToastXml(toast));
+      break;
+    }
+    case PushNotificationType::Tile:
+      payload[flutter::EncodableValue("type")] = flutter::EncodableValue("tile");
+      payload[flutter::EncodableValue("xml")] = flutter::EncodableValue(
+          winrt::to_string(event_args.TileNotification().Content().GetXml()));
+      break;
+    case PushNotificationType::Badge:
+      payload[flutter::EncodableValue("type")] =
+          flutter::EncodableValue("badge");
+      payload[flutter::EncodableValue("xml")] = flutter::EncodableValue(
+          winrt::to_string(event_args.BadgeNotification().Content().GetXml()));
+      break;
+    case PushNotificationType::Raw:
+      payload[flutter::EncodableValue("type")] = flutter::EncodableValue("raw");
+      payload[flutter::EncodableValue("rawText")] = flutter::EncodableValue(
+          winrt::to_string(event_args.RawNotification().Content()));
+      break;
+    default:
+      payload[flutter::EncodableValue("type")] =
+          flutter::EncodableValue("unknown");
+      break;
+  }
+
   return payload;
 }
 
@@ -369,16 +419,11 @@ void WnsFlutterPlugin::AttachPushNotificationHandler() {
   push_received_token_ = push_channel_.PushNotificationReceived(
       [this](const auto& sender, const auto& event_args) {
         LogDebug(L"PushNotificationReceived invoked");
-        if (event_args.NotificationType() !=
-            Windows::Networking::PushNotifications::PushNotificationType::Toast) {
-          LogDebug(L"PushNotificationReceived ignored non-toast notification");
-          return;
-        }
 
         try {
-          QueueMessageEvent(BuildIncomingMessagePayload(
-              event_args.ToastNotification()));
+          QueueMessageEvent(BuildIncomingMessagePayload(event_args));
         } catch (...) {
+          LogDebug(L"PushNotificationReceived failed to build payload");
         }
       });
   has_push_received_handler_ = true;
@@ -413,7 +458,7 @@ std::optional<LRESULT> WnsFlutterPlugin::HandleWindowProc(
     const auto* payload = reinterpret_cast<const wchar_t*>(copy_data->lpData);
     std::wstring arguments(payload,
                            (copy_data->cbData / sizeof(wchar_t)) - 1);
-    QueueOpenedAppEvent(BuildActivationPayload(arguments));
+    QueueOpenedAppEvent(BuildForwardedActivationPayload(arguments));
     return std::optional<LRESULT>(TRUE);
   }
 
