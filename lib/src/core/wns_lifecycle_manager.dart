@@ -26,17 +26,17 @@ class WnsLifecycleManager {
     _initialized = true;
   }
 
-  Future<WnsChannel> requestChannel() {
+  Future<WnsChannel> requestChannel() async {
     _ensureReady();
     return _adapter.requestChannel();
   }
 
-  Future<void> closeChannel() {
+  Future<void> closeChannel() async {
     _ensureReady();
     return _adapter.closeChannel();
   }
 
-  Future<WnsActivation?> getInitialActivation() {
+  Future<WnsActivation?> getInitialActivation() async {
     _ensureReady();
     return _adapter.getInitialActivation();
   }
