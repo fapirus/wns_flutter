@@ -14,18 +14,11 @@ class WnsClientBuilder {
   }) : _partnerCenterAdapterFactory =
            partnerCenterAdapterFactory ?? _createPartnerCenterAdapter;
 
-  final PartnerCenterWnsAdapterFactory? _partnerCenterAdapterFactory;
+  final PartnerCenterWnsAdapterFactory _partnerCenterAdapterFactory;
 
   WnsClient create(WnsInitializationOptions options) {
     if (options is PartnerCenterWnsOptions) {
-      final adapterFactory = _partnerCenterAdapterFactory;
-      if (adapterFactory == null) {
-        throw const WnsInvalidInitializationOptionsException(
-          message: 'Partner Center WNS adapter is not configured.',
-        );
-      }
-
-      return WnsClient(adapterFactory(options));
+      return WnsClient(_partnerCenterAdapterFactory(options));
     }
 
     throw WnsInvalidInitializationOptionsException(
