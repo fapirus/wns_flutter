@@ -89,6 +89,58 @@ void main() {
       );
     });
 
+    test('maps all Partner Center message payload types', () async {
+      final events = <Map<String, Object?>>[
+        {
+          'type': 'toast',
+          'source': 'foreground',
+          'arguments': 'route=toast&id=1',
+          'xml': '<toast launch="route=toast&amp;id=1" />',
+          'receivedAt': 1700000000000,
+        },
+        {
+          'type': 'raw',
+          'source': 'foreground',
+          'rawText': '{"event":"sync"}',
+          'receivedAt': 1700000000001,
+        },
+        {
+          'type': 'badge',
+          'source': 'foreground',
+          'xml': '<badge value="3" />',
+          'receivedAt': 1700000000002,
+        },
+        {
+          'type': 'tile',
+          'source': 'foreground',
+          'xml': '<tile><visual /></tile>',
+          'receivedAt': 1700000000003,
+        },
+      ];
+
+      final service = NotificationService(
+        channel,
+        messageStream: Stream<dynamic>.fromIterable(events),
+      );
+
+      final messages = await service.onMessage.toList();
+
+      expect(
+        messages.map((message) => message.type),
+        <WnsNotificationType>[
+          WnsNotificationType.toast,
+          WnsNotificationType.raw,
+          WnsNotificationType.badge,
+          WnsNotificationType.tile,
+        ],
+      );
+      expect(messages[0].payload.xml, contains('<toast'));
+      expect(messages[0].payload.launchArgumentMap['id'], '1');
+      expect(messages[1].payload.rawText, '{"event":"sync"}');
+      expect(messages[2].payload.xml, '<badge value="3" />');
+      expect(messages[3].payload.xml, '<tile><visual /></tile>');
+    });
+
     test('returns typed channel result', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {

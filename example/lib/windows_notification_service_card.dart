@@ -70,14 +70,14 @@ class _WindowsNotificationServiceCardState
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Windows Notification Service',
+                  'Partner Center WNS',
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Desktop-oriented validation console for SDK initialization, channel retrieval, cold start activation, foreground delivery, and opened-app lifecycle events.',
+                  'Desktop-oriented validation console for SDK initialization, channel retrieval, cold start activation, push delivery, and opened-app lifecycle events.',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
@@ -406,12 +406,12 @@ class _EventTimelineSection extends StatelessWidget {
     return _SectionPanel(
       title: 'Event Timeline',
       subtitle:
-          'Foreground and opened-app events are appended here in newest-first order.',
+          'Push and opened-app events are appended here in newest-first order.',
       child: entries.isEmpty
           ? const Padding(
               padding: EdgeInsets.symmetric(vertical: 24),
               child: Text(
-                'No lifecycle events yet. Send a toast or click a notification to populate the list.',
+                'No lifecycle events yet. Send a push notification or click a notification to populate the list.',
                 key: ValueKey('empty-timeline-message'),
               ),
             )

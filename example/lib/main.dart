@@ -31,7 +31,7 @@ class _MyAppState extends State<MyApp> {
       themeMode: _themeMode,
       home: Scaffold(
         appBar: AppBar(
-          title: const Text('Windows Notification Service'),
+          title: const Text('Partner Center WNS'),
           actions: [
             PopupMenuButton<ThemeMode>(
               key: const ValueKey('theme-mode-menu'),
@@ -136,7 +136,7 @@ class _HeroHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Inspect channel setup, initial activation, foreground delivery, and opened-app activation in a single responsive sample.',
+                  'Inspect channel setup, initial activation, push delivery, and opened-app activation in a single responsive sample.',
                   style: theme.textTheme.bodyLarge?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
@@ -148,7 +148,7 @@ class _HeroHeader extends StatelessWidget {
                   children: [
                     _HeaderBadge(
                       icon: Icons.notifications_active_outlined,
-                      label: 'Toast Lifecycle Demo',
+                      label: 'WNS Push Demo',
                     ),
                     _HeaderBadge(
                       icon: Icons.inventory_2_outlined,
@@ -185,7 +185,7 @@ class _HeroHeader extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      'Use the right-side timeline to compare streamed foreground events with activation events. This layout is optimized for desktop-width validation sessions.',
+                      'Use the right-side timeline to compare streamed push events with activation events. This layout is optimized for desktop-width validation sessions.',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: colorScheme.onSurface,
                         height: 1.5,

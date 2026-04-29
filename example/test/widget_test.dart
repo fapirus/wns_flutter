@@ -12,7 +12,7 @@ void main() {
   testWidgets(
     'renders desktop timeline demo and accumulates lifecycle events',
     (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(1280, 900);
+      tester.view.physicalSize = const Size(1280, 1200);
       tester.view.devicePixelRatio = 1;
       addTearDown(() {
         tester.view.resetPhysicalSize();
@@ -30,7 +30,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Notification Setting'), findsOneWidget);
-      expect(find.text('Windows Notification Service'), findsWidgets);
+      expect(find.text('Partner Center WNS'), findsWidgets);
       expect(find.text('Event Timeline'), findsOneWidget);
       expect(find.text('Clear Event Logs'), findsOneWidget);
       expect(find.byKey(const ValueKey('theme-mode-menu')), findsOneWidget);
@@ -76,17 +76,34 @@ void main() {
       );
       client.addIncoming(
         WnsMessage(
-          type: WnsNotificationType.toast,
+          type: WnsNotificationType.raw,
           payload: const WnsPayload(
-            data: <String, String>{'route': 'orders', 'id': '101'},
-            xml: '<toast>orders-101</toast>',
-            launchArguments: 'route=orders&id=101',
-            launchArgumentMap: <String, String>{
-              'route': 'orders',
-              'id': '101',
-            },
+            data: <String, String>{'event': 'sync'},
+            rawText: '{"event":"sync"}',
           ),
           receivedAt: DateTime(2025, 1, 2, 10, 12, 13),
+          source: WnsMessageSource.foreground,
+        ),
+      );
+      client.addIncoming(
+        WnsMessage(
+          type: WnsNotificationType.badge,
+          payload: const WnsPayload(
+            data: <String, String>{'count': '7'},
+            xml: '<badge value="7" />',
+          ),
+          receivedAt: DateTime(2025, 1, 2, 10, 13, 14),
+          source: WnsMessageSource.foreground,
+        ),
+      );
+      client.addIncoming(
+        WnsMessage(
+          type: WnsNotificationType.tile,
+          payload: const WnsPayload(
+            data: <String, String>{'tile': 'orders'},
+            xml: '<tile><visual /></tile>',
+          ),
+          receivedAt: DateTime(2025, 1, 2, 10, 14, 15),
           source: WnsMessageSource.foreground,
         ),
       );
@@ -109,14 +126,18 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.text('Foreground'), findsNWidgets(2));
+      expect(find.text('Foreground'), findsNWidgets(4));
       expect(find.text('Opened App'), findsOneWidget);
+      expect(find.text('toast'), findsWidgets);
+      expect(find.text('raw'), findsOneWidget);
+      expect(find.text('badge'), findsOneWidget);
+      expect(find.text('tile'), findsOneWidget);
       expect(
         find.textContaining('route=orders&id=100', findRichText: true),
         findsOneWidget,
       );
       expect(
-        find.textContaining('route=orders&id=101', findRichText: true),
+        find.textContaining('event=sync', findRichText: true),
         findsOneWidget,
       );
       expect(
