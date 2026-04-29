@@ -5,6 +5,8 @@ import '../model/channel_uri.dart';
 import '../model/notification.dart';
 
 class NotificationService {
+  static const String _initializeMethod = 'initialize';
+  static const String _closeChannelMethod = 'closeChannel';
   static const String _getChannelUriMethod = 'getChannelUri';
   static const String _getInitialMessageMethod = 'getInitialMessage';
   static const String _setForegroundPresentationMethod =
@@ -37,6 +39,21 @@ class NotificationService {
   Stream<WindowsNotificationActivation> get onMessageOpenedApp =>
       _messageOpenedAppEvents.map(_parseActivationEvent);
 
+  Future<void> initializePartnerCenter({String? appUserModelId}) async {
+    try {
+      final arguments = <String, Object?>{};
+      if (appUserModelId != null) {
+        arguments['appUserModelId'] = appUserModelId;
+      }
+
+      await _channel.invokeMethod<void>(_initializeMethod, arguments);
+    } on PlatformException catch (e) {
+      throw WnsPlatformException.fromPlatformException(e);
+    } catch (e, stack) {
+      throw WnsUnknownException(message: e.toString(), stackTrace: stack);
+    }
+  }
+
   Future<ChannelUri> getChannelUri() async {
     try {
       final Map<Object?, Object?> result = await _channel.invokeMethod(
@@ -50,6 +67,16 @@ class NotificationService {
         uri: uri,
         expirationTime: DateTime.fromMillisecondsSinceEpoch(expirationMillis),
       );
+    } on PlatformException catch (e) {
+      throw WnsPlatformException.fromPlatformException(e);
+    } catch (e, stack) {
+      throw WnsUnknownException(message: e.toString(), stackTrace: stack);
+    }
+  }
+
+  Future<void> closeChannel() async {
+    try {
+      await _channel.invokeMethod<void>(_closeChannelMethod);
     } on PlatformException catch (e) {
       throw WnsPlatformException.fromPlatformException(e);
     } catch (e, stack) {

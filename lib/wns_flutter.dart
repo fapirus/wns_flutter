@@ -1,4 +1,5 @@
 export 'package:wns_flutter/src/exception/exception.dart';
+export 'package:wns_flutter/src/adapter/partner_center/partner_center_wns_adapter.dart';
 export 'package:wns_flutter/src/config/partner_center_wns_options.dart';
 export 'package:wns_flutter/src/config/wns_initialization_options.dart';
 export 'package:wns_flutter/src/core/wns_client.dart';

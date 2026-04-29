@@ -498,7 +498,15 @@ winrt::fire_and_forget LaunchSettingsAsync(
 void WnsFlutterPlugin::HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue>& method_call,
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
-  if (method_call.method_name().compare("getNotificationSettingStatus") == 0) {
+  if (method_call.method_name().compare("initialize") == 0) {
+    if (!HasPackageIdentity()) {
+      NotPackagedError(std::move(result));
+      return;
+    }
+
+    result->Success();
+  } else if (method_call.method_name().compare(
+                 "getNotificationSettingStatus") == 0) {
     if (!HasPackageIdentity()) {
       NotPackagedError(std::move(result));
       return;
@@ -595,6 +603,28 @@ void WnsFlutterPlugin::HandleMethodCall(
       shared_result->Error("UNKNOWN_ERROR",
                            "Unknown error initiating channel creation.");
     }
+  } else if (method_call.method_name().compare("closeChannel") == 0) {
+    if (push_channel_) {
+      try {
+        TearDownPushNotificationHandler();
+        push_channel_.Close();
+        push_channel_ = nullptr;
+      } catch (const hresult_error& ex) {
+        std::ostringstream error_msg;
+        error_msg << "HRESULT: 0x" << std::hex << ex.code() << ": "
+                  << winrt::to_string(ex.message());
+        result->Error("CHANNEL_CLOSE_ERROR",
+                      "Failed to close push notification channel.",
+                      flutter::EncodableValue(error_msg.str()));
+        return;
+      } catch (...) {
+        result->Error("UNKNOWN_ERROR",
+                      "Unknown error closing push notification channel.");
+        return;
+      }
+    }
+
+    result->Success();
   } else if (method_call.method_name().compare("getInitialMessage") == 0) {
     auto payload = ConsumeInitialActivation();
     if (!payload.has_value()) {
