@@ -26,6 +26,9 @@ enum WnsNotificationPermissionStatus {
   /// The application is not authorized to post user notifications.
   denied,
 
+  /// Windows returned a notification permission state unknown to this SDK.
+  unknown,
+
   /// The application is provisionally authorized to post non-interruptive
   /// user notifications.
   provisional,

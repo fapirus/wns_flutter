@@ -64,7 +64,7 @@ class SettingService {
         break;
       default:
         windowsSetting = WnsWindowsNotificationSetting.unknown;
-        permissionStatus = WnsNotificationPermissionStatus.notDetermined;
+        permissionStatus = WnsNotificationPermissionStatus.unknown;
     }
 
     return WnsNotificationStatus(
