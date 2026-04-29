@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:wns_flutter_example/controller/wns_example_controller.dart';
 import 'package:wns_flutter_example/model/wns_event_log_entry.dart';
 import 'package:wns_flutter_example/wns_demo_client.dart';
+import 'package:wns_flutter_example/wns_error_details.dart';
 
 class WindowsNotificationServiceCard extends StatefulWidget {
   const WindowsNotificationServiceCard({super.key, required this.client});
@@ -23,7 +24,6 @@ class _WindowsNotificationServiceCardState
   void initState() {
     super.initState();
     _controller = WnsExampleController(client: widget.client);
-    _controller.refreshInitialMessage().catchError(_showErrorDialog);
   }
 
   @override
@@ -77,7 +77,7 @@ class _WindowsNotificationServiceCardState
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Desktop-oriented validation console for channel retrieval, cold start activation, foreground delivery, and opened-app lifecycle events.',
+                  'Desktop-oriented validation console for SDK initialization, channel retrieval, cold start activation, foreground delivery, and opened-app lifecycle events.',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
@@ -139,12 +139,43 @@ class _WindowsNotificationServiceCardState
       return;
     }
 
-    final message = error.toString();
+    final details = formatWnsError(error);
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Error'),
-        content: Text(message),
+        title: Text(details.title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (details.code != null) ...[
+              Text(
+                'Code: ${details.code}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+            ],
+            Text(details.message),
+            if (details.recoveryHint != null) ...[
+              const SizedBox(height: 8),
+              Text('Recovery: ${details.recoveryHint}'),
+            ],
+            if (details.details != null) ...[
+              const SizedBox(height: 8),
+              Text('Details: ${details.details}'),
+            ],
+            const SizedBox(height: 16),
+            const Text(
+              'Raw:',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              details.raw,
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -201,25 +232,49 @@ class _ControlsSection extends StatelessWidget {
           FilledButton.icon(
             onPressed: () async {
               try {
-                await controller.loadChannelUri();
+                await controller.initialize();
+              } catch (error) {
+                await onError(error);
+              }
+            },
+            icon: const Icon(Icons.power_settings_new_outlined),
+            label: const Text('Initialize Client'),
+          ),
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            onPressed: () async {
+              try {
+                await controller.requestChannel();
               } catch (error) {
                 await onError(error);
               }
             },
             icon: const Icon(Icons.link_outlined),
-            label: const Text('Get Channel URI'),
+            label: const Text('Request Channel'),
           ),
           const SizedBox(height: 10),
           OutlinedButton.icon(
             onPressed: () async {
               try {
-                await controller.refreshInitialMessage();
+                await controller.closeChannel();
+              } catch (error) {
+                await onError(error);
+              }
+            },
+            icon: const Icon(Icons.link_off_outlined),
+            label: const Text('Close Channel'),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () async {
+              try {
+                await controller.refreshInitialActivation();
               } catch (error) {
                 await onError(error);
               }
             },
             icon: const Icon(Icons.refresh),
-            label: const Text('Refresh Initial Message'),
+            label: const Text('Refresh Initial Activation'),
           ),
           const SizedBox(height: 4),
           Align(
@@ -248,7 +303,7 @@ class _SummarySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initialMessage = controller.initialMessage;
+    final initialActivation = controller.initialActivation;
 
     return _SectionPanel(
       title: 'Summary',
@@ -262,7 +317,16 @@ class _SummarySection extends StatelessWidget {
             children: [
               Chip(
                 label: Text(
-                  initialMessage == null ? 'Initial Message: Empty' : 'Initial Message: Available',
+                  controller.initialized
+                      ? 'Client: Initialized'
+                      : 'Client: Not Initialized',
+                ),
+              ),
+              Chip(
+                label: Text(
+                  initialActivation == null
+                      ? 'Initial Activation: Empty'
+                      : 'Initial Activation: Available',
                 ),
               ),
               if (controller.channelUri != '-')
@@ -295,34 +359,57 @@ class _SummarySection extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _SummaryTile(
-            label: 'Initial Message Checked At',
-            valueKey: const ValueKey('initial-message-checked-at-value'),
+            label: 'Channel Expiration',
+            valueKey: const ValueKey('channel-expiration-value'),
             child: Text(
-              controller.initialMessageCheckedAt == null
+              controller.channelExpirationTime == null
                   ? '-'
-                  : _formatDateTime(controller.initialMessageCheckedAt!),
+                  : '${_formatDateTime(controller.channelExpirationTime!)} '
+                        '(isExpired=${controller.channelIsExpired})',
             ),
           ),
           const SizedBox(height: 12),
           _SummaryTile(
-            label: 'Initial Message',
-            valueKey: const ValueKey('initial-message-value'),
-            child: initialMessage == null
-                ? const Text('No activation message')
+            label: 'Initial Activation Checked At',
+            valueKey: const ValueKey('initial-activation-checked-at-value'),
+            child: Text(
+              controller.initialActivationCheckedAt == null
+                  ? '-'
+                  : _formatDateTime(controller.initialActivationCheckedAt!),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _SummaryTile(
+            label: 'Initial Activation',
+            valueKey: const ValueKey('initial-activation-value'),
+            child: initialActivation == null
+                ? const Text('No activation')
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _SelectablePreviewText(initialMessage.arguments),
+                      _InlineMetric(
+                        label: 'Type',
+                        value: initialActivation.type.name,
+                      ),
+                      const SizedBox(height: 8),
+                      _InlineMetric(
+                        label: 'Kind',
+                        value: initialActivation.kind.name,
+                      ),
+                      const SizedBox(height: 8),
+                      _SelectablePreviewText(
+                        initialActivation.payload.launchArguments ?? '',
+                      ),
                       const SizedBox(height: 8),
                       _InlineMetric(
                         label: 'Data',
-                        value: _formatMap(initialMessage.payload.data),
+                        value: _formatMap(initialActivation.payload.data),
                       ),
-                      if (initialMessage.userInput.isNotEmpty) ...[
+                      if (initialActivation.userInput.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         _InlineMetric(
                           label: 'User Input',
-                          value: _formatMap(initialMessage.userInput),
+                          value: _formatMap(initialActivation.userInput),
                         ),
                       ],
                     ],
@@ -424,6 +511,11 @@ class _EventLogTile extends StatelessWidget {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Chip(label: Text(sourceLabel)),
+                        Chip(label: Text(entry.notificationType.name)),
+                        if (entry.messageSource != null)
+                          Chip(label: Text(entry.messageSource!.name)),
+                        if (entry.activationKind != null)
+                          Chip(label: Text(entry.activationKind!.name)),
                         Text(
                           primaryLabel,
                           style: theme.textTheme.bodySmall?.copyWith(

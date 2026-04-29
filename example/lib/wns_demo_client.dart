@@ -1,59 +1,82 @@
 import 'package:wns_flutter/wns_flutter.dart';
 
 abstract class WnsDemoClient {
-  Future<WnsNotificationStatus> getNotificationSettingStatus();
+  Future<void> initialize();
+
+  Future<WnsNotificationSettingsInfo> getNotificationSettingsInfo();
 
   Future<void> openNotificationSettingPage();
 
-  Future<ChannelUri> getChannelUri();
+  Future<WnsChannel> requestChannel();
+
+  Future<void> closeChannel();
 
   Future<void> setForegroundNotificationPresentation({required bool alert});
 
-  Future<WindowsNotificationActivation?> getInitialMessage();
+  Future<WnsActivation?> getInitialActivation();
 
-  Stream<WindowsIncomingMessage> get onMessage;
+  Stream<WnsMessage> get onMessage;
 
-  Stream<WindowsNotificationActivation> get onMessageOpenedApp;
+  Stream<WnsActivation> get onActivation;
 }
 
 class DefaultWnsDemoClient implements WnsDemoClient {
-  DefaultWnsDemoClient({WindowsNotificationService? service})
-    : _service = service ?? WindowsNotificationService.instance;
+  DefaultWnsDemoClient({
+    WnsClient? client,
+    WnsNotificationSettings? settings,
+    WindowsNotificationService? legacyService,
+  }) : _client =
+           client ??
+           const WnsClientBuilder().create(const PartnerCenterWnsOptions()),
+       _settings = settings ?? WnsNotificationSettings(),
+       _legacyService = legacyService ?? WindowsNotificationService.instance;
 
-  final WindowsNotificationService _service;
+  final WnsClient _client;
+  final WnsNotificationSettings _settings;
+  final WindowsNotificationService _legacyService;
 
   @override
-  Future<WnsNotificationStatus> getNotificationSettingStatus() {
-    return _service.getNotificationSettingStatus();
+  Future<void> initialize() {
+    return _client.initialize();
+  }
+
+  @override
+  Future<WnsNotificationSettingsInfo> getNotificationSettingsInfo() {
+    return _settings.getInfo();
   }
 
   @override
   Future<void> openNotificationSettingPage() {
-    return _service.openNotificationSettingPage();
+    return _settings.openSettingsPage();
   }
 
   @override
-  Future<ChannelUri> getChannelUri() {
-    return _service.getChannelUri();
+  Future<WnsChannel> requestChannel() {
+    return _client.requestChannel();
+  }
+
+  @override
+  Future<void> closeChannel() {
+    return _client.closeChannel();
   }
 
   @override
   Future<void> setForegroundNotificationPresentation({required bool alert}) {
-    return _service.setForegroundNotificationPresentation(alert: alert);
+    return _legacyService.setForegroundNotificationPresentation(alert: alert);
   }
 
   @override
-  Future<WindowsNotificationActivation?> getInitialMessage() {
-    return _service.getInitialMessage();
+  Future<WnsActivation?> getInitialActivation() {
+    return _client.getInitialActivation();
   }
 
   @override
-  Stream<WindowsIncomingMessage> get onMessage {
-    return _service.onMessage;
+  Stream<WnsMessage> get onMessage {
+    return _client.onMessage;
   }
 
   @override
-  Stream<WindowsNotificationActivation> get onMessageOpenedApp {
-    return _service.onMessageOpenedApp;
+  Stream<WnsActivation> get onActivation {
+    return _client.onActivation;
   }
 }

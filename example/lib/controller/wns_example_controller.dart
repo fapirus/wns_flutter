@@ -12,9 +12,7 @@ class WnsExampleController extends ChangeNotifier {
   }) : _client = client,
        _now = now ?? DateTime.now {
     _messageSubscription = _client.onMessage.listen(_handleIncomingMessage);
-    _openedAppSubscription = _client.onMessageOpenedApp.listen(
-      _handleOpenedAppMessage,
-    );
+    _activationSubscription = _client.onActivation.listen(_handleActivation);
   }
 
   static const int _maxEntries = 50;
@@ -22,27 +20,40 @@ class WnsExampleController extends ChangeNotifier {
   final WnsDemoClient _client;
   final DateTime Function() _now;
 
-  StreamSubscription<WindowsIncomingMessage>? _messageSubscription;
-  StreamSubscription<WindowsNotificationActivation>? _openedAppSubscription;
+  StreamSubscription<WnsMessage>? _messageSubscription;
+  StreamSubscription<WnsActivation>? _activationSubscription;
 
+  bool _initialized = false;
   String _channelUri = '-';
-  WindowsNotificationActivation? _initialMessage;
-  DateTime? _initialMessageCheckedAt;
+  DateTime? _channelExpirationTime;
+  bool? _channelIsExpired;
+  WnsActivation? _initialActivation;
+  DateTime? _initialActivationCheckedAt;
   bool _foregroundAlert = true;
-  WnsNotificationStatus? _notificationStatus;
+  WnsNotificationSettingsInfo? _notificationSettingsInfo;
   final List<WnsEventLogEntry> _eventLogs = <WnsEventLogEntry>[];
 
+  bool get initialized => _initialized;
   String get channelUri => _channelUri;
-  WindowsNotificationActivation? get initialMessage => _initialMessage;
-  DateTime? get initialMessageCheckedAt => _initialMessageCheckedAt;
+  DateTime? get channelExpirationTime => _channelExpirationTime;
+  bool? get channelIsExpired => _channelIsExpired;
+  WnsActivation? get initialActivation => _initialActivation;
+  DateTime? get initialActivationCheckedAt => _initialActivationCheckedAt;
   bool get foregroundAlert => _foregroundAlert;
-  WnsNotificationStatus? get notificationStatus => _notificationStatus;
+  WnsNotificationSettingsInfo? get notificationSettingsInfo =>
+      _notificationSettingsInfo;
   List<WnsEventLogEntry> get eventLogs => List<WnsEventLogEntry>.unmodifiable(
     _eventLogs,
   );
 
-  Future<void> loadNotificationStatus() async {
-    _notificationStatus = await _client.getNotificationSettingStatus();
+  Future<void> initialize() async {
+    await _client.initialize();
+    _initialized = true;
+    notifyListeners();
+  }
+
+  Future<void> loadNotificationSettingsInfo() async {
+    _notificationSettingsInfo = await _client.getNotificationSettingsInfo();
     notifyListeners();
   }
 
@@ -50,15 +61,25 @@ class WnsExampleController extends ChangeNotifier {
     return _client.openNotificationSettingPage();
   }
 
-  Future<void> loadChannelUri() async {
-    final channel = await _client.getChannelUri();
+  Future<void> requestChannel() async {
+    final channel = await _client.requestChannel();
     _channelUri = channel.uri;
+    _channelExpirationTime = channel.expirationTime;
+    _channelIsExpired = channel.isExpired;
     notifyListeners();
   }
 
-  Future<void> refreshInitialMessage() async {
-    _initialMessage = await _client.getInitialMessage();
-    _initialMessageCheckedAt = _now();
+  Future<void> closeChannel() async {
+    await _client.closeChannel();
+    _channelUri = '-';
+    _channelExpirationTime = null;
+    _channelIsExpired = null;
+    notifyListeners();
+  }
+
+  Future<void> refreshInitialActivation() async {
+    _initialActivation = await _client.getInitialActivation();
+    _initialActivationCheckedAt = _now();
     notifyListeners();
   }
 
@@ -73,29 +94,33 @@ class WnsExampleController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _handleIncomingMessage(WindowsIncomingMessage message) {
+  void _handleIncomingMessage(WnsMessage message) {
     _addLog(
       WnsEventLogEntry(
         source: WnsEventLogSource.foregroundMessage,
         loggedAt: _now(),
         sourceTimestamp: message.receivedAt,
-        arguments: message.arguments,
+        notificationType: message.type,
+        messageSource: message.source,
+        arguments: message.payload.launchArguments ?? '',
         data: message.payload.data,
         userInput: const <String, String>{},
-        rawPayload: message.payload.rawPayload,
+        rawPayload: message.payload.xml ?? message.payload.rawText,
       ),
     );
   }
 
-  void _handleOpenedAppMessage(WindowsNotificationActivation activation) {
+  void _handleActivation(WnsActivation activation) {
     _addLog(
       WnsEventLogEntry(
         source: WnsEventLogSource.openedApp,
         loggedAt: _now(),
-        arguments: activation.arguments,
+        notificationType: activation.type,
+        activationKind: activation.kind,
+        arguments: activation.payload.launchArguments ?? '',
         data: activation.payload.data,
         userInput: activation.userInput,
-        rawPayload: activation.payload.rawPayload,
+        rawPayload: activation.payload.xml ?? activation.payload.rawText,
       ),
     );
   }
@@ -111,7 +136,7 @@ class WnsExampleController extends ChangeNotifier {
   @override
   void dispose() {
     _messageSubscription?.cancel();
-    _openedAppSubscription?.cancel();
+    _activationSubscription?.cancel();
     super.dispose();
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:wns_flutter/wns_flutter.dart';
 
 enum WnsEventLogSource {
   foregroundMessage,
@@ -13,6 +14,9 @@ class WnsEventLogEntry {
     required this.arguments,
     required this.data,
     required this.userInput,
+    this.notificationType = WnsNotificationType.unknown,
+    this.messageSource,
+    this.activationKind,
     this.sourceTimestamp,
     this.rawPayload,
   });
@@ -20,6 +24,9 @@ class WnsEventLogEntry {
   final WnsEventLogSource source;
   final DateTime loggedAt;
   final DateTime? sourceTimestamp;
+  final WnsNotificationType notificationType;
+  final WnsMessageSource? messageSource;
+  final WnsActivationKind? activationKind;
   final String arguments;
   final Map<String, String> data;
   final Map<String, String> userInput;

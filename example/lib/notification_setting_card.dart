@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:wns_flutter/wns_flutter.dart';
+import 'package:wns_flutter_example/wns_error_details.dart';
 import 'package:wns_flutter_example/wns_demo_client.dart';
 
 class NotificationSettingCard extends StatefulWidget {
@@ -97,12 +97,15 @@ class NotificationSettingCardState extends State<NotificationSettingCard> {
                   onPressed: () async {
                     try {
                       final result = await widget.client
-                          .getNotificationSettingStatus();
+                          .getNotificationSettingsInfo();
                       if (!mounted) {
                         return;
                       }
                       setState(() {
-                        _statusText = result.toString();
+                        _statusText =
+                            'status=${result.status}, '
+                            'display=${result.displaySetting}, '
+                            'canShowToast=${result.canShowToast}';
                       });
                     } catch (e) {
                       if (context.mounted) {
@@ -111,7 +114,7 @@ class NotificationSettingCardState extends State<NotificationSettingCard> {
                     }
                   },
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Get Status'),
+                  label: const Text('Get Settings Info'),
                 ),
                 OutlinedButton.icon(
                   onPressed: () async {
@@ -135,30 +138,32 @@ class NotificationSettingCardState extends State<NotificationSettingCard> {
   }
 
   void _showErrorDialog(Object e) {
-    String message = e.toString();
-    String? code;
-
-    if (e is WnsException) {
-      message = e.message;
-      code = e.code;
-    }
+    final error = formatWnsError(e);
 
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Error'),
+        title: Text(error.title),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (code != null) ...[
+            if (error.code != null) ...[
               Text(
-                'Code: $code',
+                'Code: ${error.code}',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
             ],
-            Text(message),
+            Text(error.message),
+            if (error.recoveryHint != null) ...[
+              const SizedBox(height: 8),
+              Text('Recovery: ${error.recoveryHint}'),
+            ],
+            if (error.details != null) ...[
+              const SizedBox(height: 8),
+              Text('Details: ${error.details}'),
+            ],
             const SizedBox(height: 16),
             const Text(
               'Raw:',
@@ -166,7 +171,7 @@ class NotificationSettingCardState extends State<NotificationSettingCard> {
             ),
             const SizedBox(height: 4),
             Text(
-              e.toString(),
+              error.raw,
               style: const TextStyle(color: Colors.grey, fontSize: 12),
             ),
           ],
