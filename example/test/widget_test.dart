@@ -35,56 +35,80 @@ void main() {
       expect(find.text('Show foreground toast'), findsOneWidget);
       expect(find.text('Clear Event Logs'), findsOneWidget);
       expect(find.byKey(const ValueKey('theme-mode-menu')), findsOneWidget);
-      expect(find.textContaining('route=inbox&id=42'), findsOneWidget);
-      expect(find.text('Initial Message Checked At'), findsOneWidget);
+      expect(find.text('Initial Activation Checked At'), findsOneWidget);
 
       await tester.tap(find.byType(Switch));
       await tester.pumpAndSettle();
       expect(client.alertCalls, <bool>[false]);
 
-      await tester.tap(find.text('Get Status'));
+      await tester.tap(find.text('Get Settings Info'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('notification-status-value')), findsOneWidget);
       expect(find.textContaining('authorized'), findsWidgets);
 
-      await tester.tap(find.text('Get Channel URI'));
+      await tester.ensureVisible(find.text('Initialize Client'));
+      await tester.tap(find.text('Initialize Client'));
+      await tester.pumpAndSettle();
+      expect(client.initializeCalls, 1);
+      expect(find.text('Client: Initialized'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('Request Channel'));
+      await tester.tap(find.text('Request Channel'));
       await tester.pumpAndSettle();
       expect(find.textContaining('https://notify.windows.com/channel/demo'), findsOneWidget);
+      expect(find.textContaining('isExpired=false'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('Refresh Initial Activation'));
+      await tester.tap(find.text('Refresh Initial Activation'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('route=inbox&id=42'), findsOneWidget);
 
       client.addIncoming(
-        WindowsIncomingMessage(
-          arguments: 'route=orders&id=100',
-          argumentMap: const <String, String>{'route': 'orders', 'id': '100'},
-          payload: const WindowsNotificationPayload(
+        WnsMessage(
+          type: WnsNotificationType.toast,
+          payload: const WnsPayload(
             data: <String, String>{'route': 'orders', 'id': '100'},
-            rawPayload: '<toast>orders-100</toast>',
+            xml: '<toast>orders-100</toast>',
+            launchArguments: 'route=orders&id=100',
+            launchArgumentMap: <String, String>{
+              'route': 'orders',
+              'id': '100',
+            },
           ),
           receivedAt: DateTime(2025, 1, 2, 10, 11, 12),
+          source: WnsMessageSource.foreground,
         ),
       );
       client.addIncoming(
-        WindowsIncomingMessage(
-          arguments: 'route=orders&id=101',
-          argumentMap: const <String, String>{'route': 'orders', 'id': '101'},
-          payload: const WindowsNotificationPayload(
+        WnsMessage(
+          type: WnsNotificationType.toast,
+          payload: const WnsPayload(
             data: <String, String>{'route': 'orders', 'id': '101'},
-            rawPayload: '<toast>orders-101</toast>',
+            xml: '<toast>orders-101</toast>',
+            launchArguments: 'route=orders&id=101',
+            launchArgumentMap: <String, String>{
+              'route': 'orders',
+              'id': '101',
+            },
           ),
           receivedAt: DateTime(2025, 1, 2, 10, 12, 13),
+          source: WnsMessageSource.foreground,
         ),
       );
-      client.addOpenedApp(
-        WindowsNotificationActivation(
-          arguments: 'route=settings&action=open',
-          argumentMap: const <String, String>{
-            'route': 'settings',
-            'action': 'open',
-          },
-          payload: const WindowsNotificationPayload(
+      client.addActivation(
+        const WnsActivation(
+          type: WnsNotificationType.toast,
+          kind: WnsActivationKind.foregroundForward,
+          payload: WnsPayload(
             data: <String, String>{'route': 'settings', 'action': 'open'},
-            rawPayload: '<toast>settings</toast>',
+            xml: '<toast>settings</toast>',
+            launchArguments: 'route=settings&action=open',
+            launchArgumentMap: <String, String>{
+              'route': 'settings',
+              'action': 'open',
+            },
           ),
-          userInput: const <String, String>{'action': 'open'},
+          userInput: <String, String>{'action': 'open'},
         ),
       );
 
@@ -105,8 +129,9 @@ void main() {
         findsWidgets,
       );
 
-      await tester.drag(find.byType(ListView), const Offset(0, -300));
-      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('clear-event-logs-button')),
+      );
       await tester.tap(find.byKey(const ValueKey('clear-event-logs-button')));
       await tester.pumpAndSettle();
 
@@ -134,18 +159,26 @@ void main() {
 }
 
 class _FakeWnsDemoClient implements WnsDemoClient {
-  final StreamController<WindowsIncomingMessage> _messageController =
-      StreamController<WindowsIncomingMessage>.broadcast();
-  final StreamController<WindowsNotificationActivation>
-  _openedAppController =
-      StreamController<WindowsNotificationActivation>.broadcast();
+  final StreamController<WnsMessage> _messageController =
+      StreamController<WnsMessage>.broadcast();
+  final StreamController<WnsActivation> _activationController =
+      StreamController<WnsActivation>.broadcast();
 
   final List<bool> alertCalls = <bool>[];
+  int initializeCalls = 0;
 
   @override
-  Future<WnsNotificationStatus> getNotificationSettingStatus() async {
-    return const WnsNotificationStatus(
+  Future<void> initialize() async {
+    initializeCalls += 1;
+  }
+
+  @override
+  Future<WnsNotificationSettingsInfo> getNotificationSettingsInfo() async {
+    return const WnsNotificationSettingsInfo(
       status: WnsNotificationPermissionStatus.authorized,
+      displaySetting: WnsNotificationDisplaySetting.enabled,
+      canShowToast: true,
+      canOpenSettings: true,
     );
   }
 
@@ -153,31 +186,35 @@ class _FakeWnsDemoClient implements WnsDemoClient {
   Future<void> openNotificationSettingPage() async {}
 
   @override
-  Future<ChannelUri> getChannelUri() async {
-    return ChannelUri(
+  Future<WnsChannel> requestChannel() async {
+    return WnsChannel(
       uri: 'https://notify.windows.com/channel/demo',
-      expirationTime: DateTime(2025, 1, 2, 3, 4, 5),
+      expirationTime: DateTime.now().add(const Duration(days: 1)),
     );
   }
 
   @override
-  Future<WindowsNotificationActivation?> getInitialMessage() async {
-    return WindowsNotificationActivation(
-      arguments: 'route=inbox&id=42',
-      argumentMap: const <String, String>{'route': 'inbox', 'id': '42'},
-      payload: const WindowsNotificationPayload(
+  Future<void> closeChannel() async {}
+
+  @override
+  Future<WnsActivation?> getInitialActivation() async {
+    return const WnsActivation(
+      type: WnsNotificationType.toast,
+      kind: WnsActivationKind.launch,
+      payload: WnsPayload(
         data: <String, String>{'route': 'inbox', 'id': '42'},
+        launchArguments: 'route=inbox&id=42',
+        launchArgumentMap: <String, String>{'route': 'inbox', 'id': '42'},
       ),
-      userInput: const <String, String>{'action': 'view'},
+      userInput: <String, String>{'action': 'view'},
     );
   }
 
   @override
-  Stream<WindowsIncomingMessage> get onMessage => _messageController.stream;
+  Stream<WnsMessage> get onMessage => _messageController.stream;
 
   @override
-  Stream<WindowsNotificationActivation> get onMessageOpenedApp =>
-      _openedAppController.stream;
+  Stream<WnsActivation> get onActivation => _activationController.stream;
 
   @override
   Future<void> setForegroundNotificationPresentation({
@@ -186,11 +223,11 @@ class _FakeWnsDemoClient implements WnsDemoClient {
     alertCalls.add(alert);
   }
 
-  void addIncoming(WindowsIncomingMessage message) {
+  void addIncoming(WnsMessage message) {
     _messageController.add(message);
   }
 
-  void addOpenedApp(WindowsNotificationActivation activation) {
-    _openedAppController.add(activation);
+  void addActivation(WnsActivation activation) {
+    _activationController.add(activation);
   }
 }
