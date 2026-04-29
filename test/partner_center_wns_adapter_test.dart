@@ -39,7 +39,7 @@ void main() {
       expect(invokedCall!.arguments, {'appUserModelId': 'app.id'});
     });
 
-    test('requestChannel maps legacy channel result', () async {
+    test('requestChannel maps typed channel result', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
             if (call.method == 'getChannelUri') {
@@ -69,13 +69,15 @@ void main() {
       );
     });
 
-    test('onMessage maps legacy foreground toast events', () async {
+    test('onMessage forwards typed foreground toast events', () async {
       final adapter = PartnerCenterWnsAdapter(
         notificationService: NotificationService(
           channel,
           messageStream: Stream<dynamic>.value({
+            'type': 'toast',
+            'source': 'foreground',
             'arguments': 'route=thread&id=5',
-            'rawPayload': '<toast launch="route=thread&amp;id=5" />',
+            'xml': '<toast launch="route=thread&amp;id=5" />',
             'receivedAt': 1700000000000,
           }),
           messageOpenedAppStream: const Stream<dynamic>.empty(),
@@ -103,6 +105,8 @@ void main() {
           channel,
           messageStream: const Stream<dynamic>.empty(),
           messageOpenedAppStream: Stream<dynamic>.value({
+            'type': 'toast',
+            'kind': 'foregroundForward',
             'arguments': 'route=thread&id=5',
             'userInput': {'reply': 'ok'},
           }),

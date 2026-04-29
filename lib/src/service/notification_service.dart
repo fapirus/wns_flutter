@@ -1,9 +1,11 @@
 import 'package:flutter/services.dart';
+import 'package:wns_flutter/src/codec/wns_native_event_codec.dart';
 import 'package:wns_flutter/src/exception/exception.dart';
 import 'package:wns_flutter/src/internal/wns_logger.dart';
-
-import '../model/channel_uri.dart';
-import '../model/notification.dart';
+import 'package:wns_flutter/src/model/wns_activation.dart';
+import 'package:wns_flutter/src/model/wns_channel.dart';
+import 'package:wns_flutter/src/model/wns_message.dart';
+import 'package:wns_flutter/src/model/wns_notification_type.dart';
 
 class NotificationService {
   static const String _initializeMethod = 'initialize';
@@ -32,11 +34,14 @@ class NotificationService {
   final Stream<dynamic> _messageEvents;
   final Stream<dynamic> _messageOpenedAppEvents;
 
-  Stream<WindowsIncomingMessage> get onMessage =>
-      _messageEvents.map(_parseIncomingMessageEvent);
+  Stream<WnsMessage> get onMessage => _messageEvents.map(decodeWnsMessageEvent);
 
-  Stream<WindowsNotificationActivation> get onMessageOpenedApp =>
-      _messageOpenedAppEvents.map(_parseActivationEvent);
+  Stream<WnsActivation> get onActivation => _messageOpenedAppEvents.map(
+    (event) => decodeWnsActivationEvent(
+      event,
+      fallbackKind: WnsActivationKind.foregroundForward,
+    ),
+  );
 
   Future<void> initializePartnerCenter({String? appUserModelId}) async {
     try {
@@ -54,9 +59,9 @@ class NotificationService {
     }
   }
 
-  Future<ChannelUri> getChannelUri() async {
+  Future<WnsChannel> requestChannel() async {
     try {
-      wnsDebugLog('NotificationService.getChannelUri invoke');
+      wnsDebugLog('NotificationService.requestChannel invoke');
       final Map<Object?, Object?> result = await _channel.invokeMethod(
         _getChannelUriMethod,
       );
@@ -64,7 +69,7 @@ class NotificationService {
       final String uri = result['uri'] as String;
       final int expirationMillis = result['expirationTime'] as int;
 
-      return ChannelUri(
+      return WnsChannel(
         uri: uri,
         expirationTime: DateTime.fromMillisecondsSinceEpoch(expirationMillis),
       );
@@ -86,9 +91,9 @@ class NotificationService {
     }
   }
 
-  Future<WindowsNotificationActivation?> getInitialMessage() async {
+  Future<WnsActivation?> getInitialActivation() async {
     try {
-      wnsDebugLog('NotificationService.getInitialMessage invoke');
+      wnsDebugLog('NotificationService.getInitialActivation invoke');
       final result = await _channel.invokeMethod<Object?>(
         _getInitialMessageMethod,
       );
@@ -97,7 +102,10 @@ class NotificationService {
         return null;
       }
 
-      return _parseActivationEvent(result);
+      return decodeWnsActivationEvent(
+        result,
+        fallbackKind: WnsActivationKind.launch,
+      );
     } on PlatformException catch (e) {
       throw WnsPlatformException.fromPlatformException(e);
     } on WnsException {
@@ -107,43 +115,4 @@ class NotificationService {
     }
   }
 
-  WindowsIncomingMessage _parseIncomingMessageEvent(dynamic event) {
-    final map = _requireMap(
-      event,
-      message: 'Expected incoming message event payload to be a map.',
-      code: 'INVALID_MESSAGE_PAYLOAD',
-    );
-
-    return WindowsIncomingMessage.fromMap(map);
-  }
-
-  WindowsNotificationActivation _parseActivationEvent(dynamic event) {
-    final map = _requireMap(
-      event,
-      message: 'Expected activation event payload to be a map.',
-      code: 'INVALID_ACTIVATION_PAYLOAD',
-    );
-
-    return WindowsNotificationActivation.fromMap(map);
-  }
-
-  Map<Object?, Object?> _requireMap(
-    dynamic value, {
-    required String message,
-    required String code,
-  }) {
-    if (value is Map<Object?, Object?>) {
-      return value;
-    }
-
-    if (value is Map) {
-      return Map<Object?, Object?>.from(value);
-    }
-
-    throw WnsMessageParseException(
-      message: message,
-      code: code,
-      details: value,
-    );
-  }
 }
