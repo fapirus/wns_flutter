@@ -459,6 +459,10 @@ std::optional<LRESULT> WnsFlutterPlugin::HandleWindowProc(
     std::wstring arguments(payload,
                            (copy_data->cbData / sizeof(wchar_t)) - 1);
     QueueOpenedAppEvent(BuildForwardedActivationPayload(arguments));
+    if (::IsIconic(hwnd)) {
+      ::ShowWindow(hwnd, SW_RESTORE);
+    }
+    ::SetForegroundWindow(hwnd);
     return std::optional<LRESULT>(TRUE);
   }
 
