@@ -43,7 +43,14 @@ class WnsFlutterPlugin : public flutter::Plugin {
   void QueueOpenedAppEvent(EncodableMap payload);
   void AttachPushNotificationHandler();
   void TearDownPushNotificationHandler();
+  void InstallWindowProc();
+  void UninstallWindowProc();
   std::optional<LRESULT> HandleWindowProc(
+      HWND hwnd,
+      UINT message,
+      WPARAM wparam,
+      LPARAM lparam);
+  static LRESULT CALLBACK WindowProc(
       HWND hwnd,
       UINT message,
       WPARAM wparam,
@@ -55,7 +62,7 @@ class WnsFlutterPlugin : public flutter::Plugin {
 
   flutter::PluginRegistrarWindows* registrar_;
   HWND main_window_ = nullptr;
-  int window_proc_delegate_id_ = 0;
+  WNDPROC previous_window_proc_ = nullptr;
 
   std::unique_ptr<EventSink> message_sink_;
   std::unique_ptr<EventSink> message_opened_app_sink_;

@@ -32,6 +32,7 @@ namespace {
 
 constexpr wchar_t kActivationForwardWindowMessageName[] =
     L"WnsFlutterActivationForward";
+constexpr wchar_t kPluginWindowPropertyName[] = L"WnsFlutterPluginInstance";
 constexpr ULONG_PTR kActivationCopyDataSignature = 0x574E5346;  // WNSF
 constexpr UINT kDispatchMessageEvent = WM_APP + 101;
 
@@ -335,10 +336,7 @@ WnsFlutterPlugin::WnsFlutterPlugin(flutter::PluginRegistrarWindows* registrar)
   }
 
   if (main_window_ != nullptr) {
-    window_proc_delegate_id_ = registrar_->RegisterTopLevelWindowProcDelegate(
-        [this](HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
-          return HandleWindowProc(hwnd, message, wparam, lparam);
-        });
+    InstallWindowProc();
   }
 
   initial_activation_payload_ = BuildActivationFromCommandLine();
@@ -354,10 +352,7 @@ WnsFlutterPlugin::WnsFlutterPlugin(flutter::PluginRegistrarWindows* registrar)
 
 WnsFlutterPlugin::~WnsFlutterPlugin() {
   TearDownPushNotificationHandler();
-
-  if (registrar_ != nullptr && window_proc_delegate_id_ != 0) {
-    registrar_->UnregisterTopLevelWindowProcDelegate(window_proc_delegate_id_);
-  }
+  UninstallWindowProc();
 }
 
 void WnsFlutterPlugin::SetUpEventChannels(flutter::BinaryMessenger* messenger) {
@@ -436,7 +431,11 @@ void WnsFlutterPlugin::QueueMessageEvent(EncodableMap payload) {
   }
 
   if (main_window_ != nullptr) {
-    ::PostMessage(main_window_, kDispatchMessageEvent, 0, 0);
+    if (!::PostMessage(main_window_, kDispatchMessageEvent, 0, 0)) {
+      LogDebug(L"QueueMessageEvent failed to post dispatch message");
+    }
+  } else {
+    LogDebug(L"QueueMessageEvent skipped dispatch: no main window");
   }
 }
 
@@ -480,14 +479,83 @@ void WnsFlutterPlugin::TearDownPushNotificationHandler() {
   has_push_received_handler_ = false;
 }
 
+void WnsFlutterPlugin::InstallWindowProc() {
+  if (main_window_ == nullptr || previous_window_proc_ != nullptr) {
+    return;
+  }
+
+  if (!::SetPropW(main_window_, kPluginWindowPropertyName,
+                  reinterpret_cast<HANDLE>(this))) {
+    LogDebug(L"InstallWindowProc failed to set window property");
+    return;
+  }
+
+  ::SetLastError(ERROR_SUCCESS);
+  auto previous = ::SetWindowLongPtrW(
+      main_window_, GWLP_WNDPROC,
+      reinterpret_cast<LONG_PTR>(&WnsFlutterPlugin::WindowProc));
+  if (previous == 0 && ::GetLastError() != ERROR_SUCCESS) {
+    ::RemovePropW(main_window_, kPluginWindowPropertyName);
+    LogDebug(L"InstallWindowProc failed to subclass window");
+    return;
+  }
+
+  previous_window_proc_ = reinterpret_cast<WNDPROC>(previous);
+  LogDebug(L"InstallWindowProc installed plugin message handler");
+}
+
+void WnsFlutterPlugin::UninstallWindowProc() {
+  if (main_window_ == nullptr || previous_window_proc_ == nullptr) {
+    return;
+  }
+
+  const auto* plugin = reinterpret_cast<WnsFlutterPlugin*>(
+      ::GetPropW(main_window_, kPluginWindowPropertyName));
+  if (plugin == this) {
+    const auto current_proc =
+        reinterpret_cast<WNDPROC>(::GetWindowLongPtrW(main_window_,
+                                                      GWLP_WNDPROC));
+    if (current_proc == &WnsFlutterPlugin::WindowProc) {
+      ::SetWindowLongPtrW(main_window_, GWLP_WNDPROC,
+                          reinterpret_cast<LONG_PTR>(previous_window_proc_));
+    }
+    ::RemovePropW(main_window_, kPluginWindowPropertyName);
+  }
+
+  previous_window_proc_ = nullptr;
+}
+
+LRESULT CALLBACK WnsFlutterPlugin::WindowProc(
+    HWND hwnd,
+    UINT message,
+    WPARAM wparam,
+    LPARAM lparam) {
+  auto* plugin = reinterpret_cast<WnsFlutterPlugin*>(
+      ::GetPropW(hwnd, kPluginWindowPropertyName));
+  if (plugin != nullptr) {
+    auto result = plugin->HandleWindowProc(hwnd, message, wparam, lparam);
+    if (result.has_value()) {
+      return *result;
+    }
+
+    if (plugin->previous_window_proc_ != nullptr) {
+      return ::CallWindowProcW(plugin->previous_window_proc_, hwnd, message,
+                               wparam, lparam);
+    }
+  }
+
+  return ::DefWindowProcW(hwnd, message, wparam, lparam);
+}
+
 std::optional<LRESULT> WnsFlutterPlugin::HandleWindowProc(
     HWND hwnd,
     UINT message,
     WPARAM wparam,
     LPARAM lparam) {
   if (message == kDispatchMessageEvent) {
+    LogDebug(L"HandleWindowProc flushing queued message events");
     FlushPendingMessageEvents();
-    return std::nullopt;
+    return std::optional<LRESULT>(0);
   }
 
   if (message == WM_COPYDATA) {
