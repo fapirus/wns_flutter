@@ -13,6 +13,7 @@
 #include <optional>
 
 #include <winrt/Windows.Networking.PushNotifications.h>
+#include <winrt/Windows.UI.Notifications.h>
 
 namespace wns_flutter {
 
@@ -43,6 +44,8 @@ class WnsFlutterPlugin : public flutter::Plugin {
   void QueueOpenedAppEvent(EncodableMap payload);
   void AttachPushNotificationHandler();
   void TearDownPushNotificationHandler();
+  void TrackForegroundToastActivation(
+      const winrt::Windows::UI::Notifications::ToastNotification& toast);
   void InstallWindowProc();
   void UninstallWindowProc();
   std::optional<LRESULT> HandleWindowProc(
@@ -64,11 +67,20 @@ class WnsFlutterPlugin : public flutter::Plugin {
   HWND main_window_ = nullptr;
   WNDPROC previous_window_proc_ = nullptr;
 
+  struct ForegroundToastActivationRegistration {
+    winrt::Windows::UI::Notifications::ToastNotification toast{nullptr};
+    winrt::Windows::UI::Notifications::ToastNotification::Activated_revoker
+        activated_revoker;
+  };
+
   std::unique_ptr<EventSink> message_sink_;
   std::unique_ptr<EventSink> message_opened_app_sink_;
   std::deque<EncodableMap> pending_message_events_;
   std::deque<EncodableMap> pending_opened_app_events_;
   std::mutex pending_events_mutex_;
+  std::deque<ForegroundToastActivationRegistration>
+      foreground_toast_activation_registrations_;
+  std::mutex foreground_toast_activation_mutex_;
 
   std::optional<EncodableMap> initial_activation_payload_;
   winrt::Windows::Networking::PushNotifications::PushNotificationChannel

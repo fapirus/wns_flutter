@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 
+#include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Data.Xml.Dom.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Networking.PushNotifications.h>
@@ -35,6 +36,8 @@ constexpr wchar_t kActivationForwardWindowMessageName[] =
 constexpr wchar_t kPluginWindowPropertyName[] = L"WnsFlutterPluginInstance";
 constexpr ULONG_PTR kActivationCopyDataSignature = 0x574E5346;  // WNSF
 constexpr UINT kDispatchMessageEvent = WM_APP + 101;
+constexpr UINT kDispatchActivationEvent = WM_APP + 102;
+constexpr size_t kMaxForegroundToastActivationRegistrations = 32;
 
 void LogDebug(const std::wstring& message) {
   ::OutputDebugStringW((L"[wns_flutter] " + message + L"\n").c_str());
@@ -75,6 +78,10 @@ std::string WideToUtf8(const std::wstring& value) {
 std::wstring Utf8ToWide(const std::string& value) {
   return winrt::to_hstring(value).c_str();
 }
+
+std::string GetToastLaunchArguments(const ToastNotification& toast);
+
+std::string GetToastXml(const ToastNotification& toast);
 
 std::wstring JoinCommandLineArguments() {
   int argument_count = 0;
@@ -123,6 +130,74 @@ flutter::EncodableMap BuildForwardedActivationPayload(
   auto payload = BuildActivationPayload(arguments);
   payload[flutter::EncodableValue("kind")] =
       flutter::EncodableValue("foregroundForward");
+  return payload;
+}
+
+std::string InspectableToString(const IInspectable& value) {
+  if (value == nullptr) {
+    return std::string();
+  }
+
+  try {
+    return winrt::to_string(winrt::unbox_value<hstring>(value));
+  } catch (...) {
+  }
+
+  try {
+    return std::to_string(winrt::unbox_value<int32_t>(value));
+  } catch (...) {
+  }
+
+  try {
+    return std::to_string(winrt::unbox_value<uint32_t>(value));
+  } catch (...) {
+  }
+
+  try {
+    return winrt::unbox_value<bool>(value) ? "true" : "false";
+  } catch (...) {
+  }
+
+  return std::string();
+}
+
+flutter::EncodableMap UserInputToEncodableMap(
+    const Windows::Foundation::Collections::ValueSet& user_input) {
+  flutter::EncodableMap output;
+  for (const auto& entry : user_input) {
+    output[flutter::EncodableValue(winrt::to_string(entry.Key()))] =
+        flutter::EncodableValue(InspectableToString(entry.Value()));
+  }
+  return output;
+}
+
+flutter::EncodableMap BuildForegroundToastActivationPayload(
+    const ToastNotification& toast,
+    const ToastActivatedEventArgs& activated_args) {
+  std::wstring arguments;
+  flutter::EncodableMap user_input;
+
+  if (activated_args != nullptr) {
+    try {
+      arguments = activated_args.Arguments().c_str();
+    } catch (...) {
+    }
+
+    try {
+      user_input = UserInputToEncodableMap(activated_args.UserInput());
+    } catch (...) {
+    }
+  }
+
+  if (arguments.empty()) {
+    arguments = Utf8ToWide(GetToastLaunchArguments(toast));
+  }
+
+  auto payload = BuildForwardedActivationPayload(arguments);
+  payload[flutter::EncodableValue("xml")] =
+      flutter::EncodableValue(GetToastXml(toast));
+  payload[flutter::EncodableValue("userInput")] =
+      flutter::EncodableValue(user_input);
   return payload;
 }
 
@@ -441,13 +516,18 @@ void WnsFlutterPlugin::QueueMessageEvent(EncodableMap payload) {
 
 void WnsFlutterPlugin::QueueOpenedAppEvent(EncodableMap payload) {
   LogDebug(L"QueueOpenedAppEvent received activation");
-  if (message_opened_app_sink_) {
-    message_opened_app_sink_->Success(flutter::EncodableValue(payload));
-    return;
+  {
+    std::lock_guard<std::mutex> lock(pending_events_mutex_);
+    pending_opened_app_events_.push_back(std::move(payload));
   }
 
-  std::lock_guard<std::mutex> lock(pending_events_mutex_);
-  pending_opened_app_events_.push_back(std::move(payload));
+  if (main_window_ != nullptr) {
+    if (!::PostMessage(main_window_, kDispatchActivationEvent, 0, 0)) {
+      LogDebug(L"QueueOpenedAppEvent failed to post dispatch message");
+    }
+  } else {
+    LogDebug(L"QueueOpenedAppEvent skipped dispatch: no main window");
+  }
 }
 
 void WnsFlutterPlugin::AttachPushNotificationHandler() {
@@ -466,6 +546,7 @@ void WnsFlutterPlugin::AttachPushNotificationHandler() {
           if (event_args.NotificationType() ==
               Windows::Networking::PushNotifications::PushNotificationType::
                   Toast) {
+            TrackForegroundToastActivation(event_args.ToastNotification());
             LogDebug(
                 L"PushNotificationReceived skipped foreground toast "
                 L"onMessage by activation-only policy");
@@ -486,6 +567,37 @@ void WnsFlutterPlugin::TearDownPushNotificationHandler() {
     push_channel_.PushNotificationReceived(push_received_token_);
   }
   has_push_received_handler_ = false;
+}
+
+void WnsFlutterPlugin::TrackForegroundToastActivation(
+    const ToastNotification& toast) {
+  if (toast == nullptr) {
+    LogDebug(L"TrackForegroundToastActivation skipped: empty toast");
+    return;
+  }
+
+  auto revoker = toast.Activated(
+      winrt::auto_revoke,
+      [this](const ToastNotification& sender, const IInspectable& args) {
+        LogDebug(L"Foreground toast Activated invoked");
+        try {
+          auto activated_args = args.try_as<ToastActivatedEventArgs>();
+          QueueOpenedAppEvent(
+              BuildForegroundToastActivationPayload(sender, activated_args));
+          BringWindowToForeground(main_window_);
+        } catch (...) {
+          LogDebug(L"Foreground toast Activated failed to build payload");
+        }
+      });
+
+  std::lock_guard<std::mutex> lock(foreground_toast_activation_mutex_);
+  foreground_toast_activation_registrations_.push_back(
+      ForegroundToastActivationRegistration{toast, std::move(revoker)});
+  while (foreground_toast_activation_registrations_.size() >
+         kMaxForegroundToastActivationRegistrations) {
+    foreground_toast_activation_registrations_.pop_front();
+  }
+  LogDebug(L"TrackForegroundToastActivation registered activation handler");
 }
 
 void WnsFlutterPlugin::InstallWindowProc() {
@@ -564,6 +676,12 @@ std::optional<LRESULT> WnsFlutterPlugin::HandleWindowProc(
   if (message == kDispatchMessageEvent) {
     LogDebug(L"HandleWindowProc flushing queued message events");
     FlushPendingMessageEvents();
+    return std::optional<LRESULT>(0);
+  }
+
+  if (message == kDispatchActivationEvent) {
+    LogDebug(L"HandleWindowProc flushing queued activation events");
+    FlushPendingActivationEvents();
     return std::optional<LRESULT>(0);
   }
 
