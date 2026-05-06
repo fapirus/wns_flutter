@@ -1,40 +1,100 @@
-# MSIX WNS Setup
+# MSIX And Partner Center Setup
 
-This guide describes the packaged validation flow expected by `wns_flutter`.
+This guide describes the packaged Windows setup expected by `wns_flutter`.
+
+The package currently supports the classic Partner Center / WNS path. It expects
+your Flutter app to run as an installed MSIX package with package identity.
 
 ## Preconditions
 
-- You have a Windows app that can be packaged as `MSIX`.
-- You have completed the WNS app registration in `Partner Center`.
-- You can send WNS toast payloads from your server.
+- Your app can be packaged and installed as MSIX.
+- The installed app has package identity at runtime.
+- You have a Partner Center app registration for WNS.
+- Your backend can store channel URIs and send WNS payloads.
 
-## Example package metadata
+Do not put WNS server credentials in the Flutter app. The client requests a
+channel URI; the backend owns authentication and delivery.
 
-The example app includes placeholder `msix_config` values.
-Before packaging, replace these values with your real metadata:
+## Package Metadata
 
-- `publisher_display_name`
-- `identity_name`
-- `publisher`
+Before packaging, make sure the MSIX metadata matches the app registration you
+intend to use:
 
-## Validation flow
+- package identity name
+- publisher
+- publisher display name
+- package version
+- app display name
+- app icon
 
-1. Build and package the app as `MSIX`.
-2. Install the packaged app.
-3. Launch the installed app and request a channel URI.
-4. Register the channel URI on your server side.
-5. Send a WNS toast payload from the server.
-6. Validate the lifecycle API results in the app UI.
+The example app may contain placeholder values. Replace them with values from
+your own packaging and Partner Center setup before production validation.
 
-## Expected checks
+## Client Setup
 
-- `getChannelUri()` returns a valid URI.
-- `onMessage` receives foreground toast payloads.
-- `getInitialMessage()` restores activation from a terminated launch.
-- `onMessageOpenedApp` receives activation when the process is already running.
-- `setForegroundNotificationPresentation(alert: ...)` changes foreground toast behavior.
+Create a Partner Center client:
 
-## Important note
+```dart
+import 'package:wns_flutter/wns_flutter.dart';
 
-`flutter run -d windows` is not the verification path for this plugin.
-The WNS-dependent APIs must be validated from an installed `MSIX` app with package identity.
+final client = const WnsClientBuilder().create(
+  const PartnerCenterWnsOptions(),
+);
+```
+
+Then initialize and request a channel:
+
+```dart
+await client.initialize();
+
+final channel = await client.requestChannel();
+print(channel.uri);
+print(channel.expirationTime);
+```
+
+Call `requestChannel()` from the installed app. The returned URI is expected to
+be treated as an app/backend registration value, not as a permanent client-side
+cache owned by the SDK.
+
+## Backend Responsibilities
+
+Your backend should:
+
+- accept channel URI updates from an authenticated app/user context
+- verify that the channel URI belongs to `notify.windows.com`
+- store the latest usable channel URI for the target app/user/device
+- authenticate with WNS using your server-side credentials
+- send payloads to WNS and log response codes and relevant headers
+- stop using expired or rejected channels and ask the app for a fresh channel
+
+## Validation Flow
+
+1. Build the Windows app.
+2. Package and install it as MSIX.
+3. Launch the installed app from the Start menu or package entry point.
+4. Initialize `WnsClient`.
+5. Request a channel with `requestChannel()`.
+6. Send the channel URI to your backend.
+7. Send WNS payloads from the backend.
+8. Validate client-side events with `onMessage`, `getInitialActivation`, and
+   `onActivation`.
+
+## Expected Client Checks
+
+- `requestChannel()` returns a `WnsChannel` with a URI and expiration time.
+- Foreground raw pushes emit `WnsRawMessage` through `onMessage`.
+- Foreground badge pushes emit `WnsBadgeMessage` through `onMessage`.
+- Foreground tile pushes emit `WnsTileMessage` through `onMessage`.
+- Toast launch from a terminated app is available through
+  `getInitialActivation()`.
+- Toast click/action/input while the app is running is emitted through
+  `onActivation`.
+
+## Important Notes
+
+`flutter run -d windows` is not the validation path for WNS channel APIs. That
+command runs an unpackaged process, so package-identity-dependent calls are
+expected to fail.
+
+If you see `0x80070490`, first confirm that you launched the installed MSIX app,
+not the unpackaged development runner.

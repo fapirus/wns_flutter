@@ -2,22 +2,41 @@
 
 [![Korean Documentation](https://img.shields.io/badge/Language-Korean-blue)](README_ko.md)
 
-Flutter plugin for Windows Notification Service (WNS).
-This package targets packaged Windows apps that use MSIX, Partner Center registration, and the classic WNS channel flow.
+A Flutter plugin for packaged Windows apps that need Windows Notification
+Service (WNS) channel registration and push event handling.
 
-## Current Status
+`wns_flutter` currently targets the classic Partner Center / WNS path for
+installed MSIX apps. It does not try to make unpackaged `flutter run -d windows`
+behave like a packaged production app.
 
-The current development target is `0.0.2`.
-This version focuses on the toast push lifecycle that Flutter developers typically expect from Firebase Cloud Messaging style APIs.
+## Status
 
-## Features
+Use `0.0.2` or newer for real integration work.
 
-- Read Windows notification setting status.
-- Open the Windows notification settings page.
-- Create a WNS channel URI from a packaged Windows app.
-- Receive foreground toast deliveries through `onMessage`.
-- Read activation payloads through `getInitialMessage` and `onMessageOpenedApp`.
-- Control foreground toast presentation through `setForegroundNotificationPresentation`.
+`0.0.1` was the "it compiles, ship the curiosity" release. It is kept for
+history, but it should not be used as the basis for an actual WNS integration.
+
+## Available Now
+
+| Area | Support |
+| --- | --- |
+| Partner Center WNS path | Create and close WNS channels from a packaged Windows app. |
+| Package identity | Requires MSIX/package identity at runtime. |
+| Foreground push events | Receive raw, badge, and tile push deliveries through `onMessage`. |
+| Toast activation | Read launch, click, action, and input activation through `getInitialActivation` and `onActivation`. |
+| Typed event models | Handle `WnsRawMessage`, `WnsBadgeMessage`, `WnsTileMessage`, and `WnsToastActivation`. |
+| Notification settings | Read Windows notification settings and open the related settings page. |
+| Error handling | Map platform failures to typed `WnsException` classes. |
+
+## Planned
+
+The current public roadmap is intentionally small. The next areas of work are:
+
+- stronger setup and validation documentation
+- raw push background handling
+- Azure AD / Windows App SDK adapter support
+
+These are planned capabilities, not version promises.
 
 ## Installation
 
@@ -28,70 +47,123 @@ dependencies:
 
 ## Windows Requirements
 
-WNS support in this plugin assumes all of the following.
+WNS support in this package assumes all of the following:
 
-- The app is installed as an MSIX package.
-- The app has package identity at runtime.
-- The app is registered for WNS in Partner Center.
-- The server sends WNS toast payloads to the channel URI issued for the installed app.
+- Windows 10 version 1809, build 17763, or later
+- an MSIX-installed Windows app
+- package identity at runtime
+- a Partner Center app registration for the classic WNS path
+- a backend that stores the channel URI and sends WNS payloads
 
-`flutter run -d windows` starts an unpackaged Win32 process, so WNS-dependent APIs fail with `0x80070490`.
-The plugin does not provide a temporary AUMID workaround.
+The client requests a channel URI. Your backend is responsible for storing that
+URI, authenticating with WNS, validating that the URI belongs to
+`notify.windows.com`, and sending payloads.
 
-## Lifecycle Mapping
-
-| App state | Flutter API | Meaning |
-| --- | --- | --- |
-| Foreground / process alive | `onMessage` | Toast push arrived while the app process was running |
-| Terminated -> launched from toast | `getInitialMessage()` | Read the activation payload that launched the app |
-| Background / foreground -> toast selected | `onMessageOpenedApp` | Read the activation payload when the running app is opened from a toast |
-| Foreground | `setForegroundNotificationPresentation(alert: ...)` | Keep or suppress the default foreground toast |
-
-## Usage
+## Quick Start
 
 ```dart
-final service = WindowsNotificationService.instance;
+import 'package:wns_flutter/wns_flutter.dart';
 
-final channel = await service.getChannelUri();
+final client = const WnsClientBuilder().create(
+  const PartnerCenterWnsOptions(),
+);
+
+await client.initialize();
+
+final channel = await client.requestChannel();
 print(channel.uri);
+print(channel.expirationTime);
 
-await service.setForegroundNotificationPresentation(alert: true);
-
-final initialMessage = await service.getInitialMessage();
-if (initialMessage != null) {
-  print(initialMessage.arguments);
+final initialActivation = await client.getInitialActivation();
+if (initialActivation case final WnsToastActivation toast) {
+  print(toast.arguments);
+  print(toast.argumentMap);
 }
 
-service.onMessage.listen((message) {
-  print(message.arguments);
-  print(message.payload.data);
+client.onMessage.listen((message) {
+  switch (message) {
+    case WnsRawMessage():
+      print(message.text);
+      print(message.data);
+    case WnsBadgeMessage():
+      print(message.value);
+      print(message.glyph);
+    case WnsTileMessage():
+      print(message.xml);
+  }
 });
 
-service.onMessageOpenedApp.listen((activation) {
-  print(activation.arguments);
-  print(activation.userInput);
+client.onActivation.listen((activation) {
+  switch (activation) {
+    case WnsToastActivation():
+      print(activation.kind);
+      print(activation.arguments);
+      print(activation.userInput);
+  }
 });
 ```
 
-## Development Workflow
+Notification settings are separate from channel initialization:
 
-1. Package and install the app as MSIX.
-2. Confirm package identity and Partner Center registration.
-3. Request a channel URI from the installed app.
-4. Send WNS toast payloads from your server.
-5. Validate `onMessage`, `getInitialMessage`, and `onMessageOpenedApp`.
+```dart
+final settings = WnsNotificationSettings();
+final info = await settings.getInfo();
 
-For the packaged setup flow, see [docs/windows/msix-wns-setup.md](docs/windows/msix-wns-setup.md).
+if (!info.canShowToast && info.canOpenSettings) {
+  await settings.openSettingsPage();
+}
+```
+
+## Event Lifecycle
+
+| App state | API | Event model |
+| --- | --- | --- |
+| Process alive, raw push received | `client.onMessage` | `WnsRawMessage` |
+| Process alive, badge push received | `client.onMessage` | `WnsBadgeMessage` |
+| Process alive, tile push received | `client.onMessage` | `WnsTileMessage` |
+| App launched from toast | `client.getInitialActivation()` | `WnsToastActivation` |
+| Running app opened from toast click/action/input | `client.onActivation` | `WnsToastActivation` |
+
+Foreground toast pushes are activation-only in this package. Windows may display
+or store the toast, but the SDK does not emit a toast `onMessage` event before
+the user selects or acts on it.
+
+## Development And Validation
+
+`flutter run -d windows` starts an unpackaged Win32 process. WNS APIs that need
+package identity are expected to fail in that mode.
+
+Use this flow instead:
+
+1. Build and package the example or your app as MSIX.
+2. Install the package.
+3. Launch the installed app.
+4. Initialize `WnsClient`.
+5. Request a channel URI.
+6. Register the channel URI with your backend.
+7. Send raw, badge, tile, and toast payloads through WNS.
+8. Validate `onMessage`, `getInitialActivation`, and `onActivation`.
+
+## Documentation
+
+- [MSIX and Partner Center setup](docs/windows/msix-wns-setup.md)
+- [Message and activation lifecycle](docs/windows/message-lifecycle.md)
+- [Manual validation checklist](docs/windows/manual-validation.md)
 
 ## Troubleshooting
 
-- `WINRT_ERROR` (`0x80070490`)
-  - Cause: the current process does not have package identity.
-  - Fix: install and run the app as MSIX before calling WNS APIs.
-- Channel creation fails
-  - Cause: package identity, connectivity, or WNS registration is incomplete.
-  - Fix: confirm the MSIX install, Partner Center registration, and network connectivity.
+### `WINRT_ERROR` or `0x80070490`
 
-## Minimum Requirements
+The app probably has no package identity. Install and launch the MSIX package
+before calling WNS APIs.
 
-- Windows 10 version 1809 (build 17763) or later.
+### Channel creation fails
+
+Confirm the package is installed, Partner Center registration is complete, the
+device has network access, and the app is requesting a channel from the installed
+package context.
+
+### Toast click does not return to the app
+
+Confirm the toast contains launch arguments and that validation is happening
+from the installed app, not from an unpackaged development process.
