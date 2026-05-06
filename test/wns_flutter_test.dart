@@ -58,88 +58,71 @@ void main() {
       expect(activation.payload.data, {'route': 'detail', 'id': '42'});
     });
 
-    test('maps incoming message payload and received time', () async {
+    test('maps foreground raw message payload and received time', () async {
       final service = NotificationService(
         channel,
         messageStream: Stream<dynamic>.value({
-          'type': 'toast',
+          'type': 'raw',
           'source': 'foreground',
-          'arguments': 'route=inbox&messageId=m-1',
-          'xml': '<toast launch="route=inbox&amp;messageId=m-1" />',
+          'data': {'event': 'sync', 'messageId': 'm-1'},
+          'rawText': '{"event":"sync","messageId":"m-1"}',
           'receivedAt': 1700000000000,
         }),
       );
 
       final message = await service.onMessage.first;
 
-      expect(message.type, WnsNotificationType.toast);
+      expect(message.type, WnsNotificationType.raw);
       expect(message.source, WnsMessageSource.foreground);
-      expect(message.payload.launchArgumentMap, {
-        'route': 'inbox',
-        'messageId': 'm-1',
-      });
-      expect(message.payload.data, {'route': 'inbox', 'messageId': 'm-1'});
-      expect(
-        message.payload.xml,
-        '<toast launch="route=inbox&amp;messageId=m-1" />',
-      );
+      expect(message.payload.data, {'event': 'sync', 'messageId': 'm-1'});
+      expect(message.payload.rawText, '{"event":"sync","messageId":"m-1"}');
       expect(
         message.receivedAt,
         DateTime.fromMillisecondsSinceEpoch(1700000000000),
       );
     });
 
-    test('maps all Partner Center message payload types', () async {
-      final events = <Map<String, Object?>>[
-        {
-          'type': 'toast',
-          'source': 'foreground',
-          'arguments': 'route=toast&id=1',
-          'xml': '<toast launch="route=toast&amp;id=1" />',
-          'receivedAt': 1700000000000,
-        },
-        {
-          'type': 'raw',
-          'source': 'foreground',
-          'rawText': '{"event":"sync"}',
-          'receivedAt': 1700000000001,
-        },
-        {
-          'type': 'badge',
-          'source': 'foreground',
-          'xml': '<badge value="3" />',
-          'receivedAt': 1700000000002,
-        },
-        {
-          'type': 'tile',
-          'source': 'foreground',
-          'xml': '<tile><visual /></tile>',
-          'receivedAt': 1700000000003,
-        },
-      ];
+    test(
+      'maps Partner Center raw badge and tile message payload types',
+      () async {
+        final events = <Map<String, Object?>>[
+          {
+            'type': 'raw',
+            'source': 'foreground',
+            'rawText': '{"event":"sync"}',
+            'receivedAt': 1700000000000,
+          },
+          {
+            'type': 'badge',
+            'source': 'foreground',
+            'xml': '<badge value="3" />',
+            'receivedAt': 1700000000001,
+          },
+          {
+            'type': 'tile',
+            'source': 'foreground',
+            'xml': '<tile><visual /></tile>',
+            'receivedAt': 1700000000002,
+          },
+        ];
 
-      final service = NotificationService(
-        channel,
-        messageStream: Stream<dynamic>.fromIterable(events),
-      );
+        final service = NotificationService(
+          channel,
+          messageStream: Stream<dynamic>.fromIterable(events),
+        );
 
-      final messages = await service.onMessage.toList();
+        final messages = await service.onMessage.toList();
 
-      expect(
-        messages.map((message) => message.type),
-        <WnsNotificationType>[
-          WnsNotificationType.toast,
+        expect(messages.map((message) => message.type), <WnsNotificationType>[
           WnsNotificationType.raw,
           WnsNotificationType.badge,
           WnsNotificationType.tile,
-        ],
-      );
-      expect(messages[0].payload.xml, contains('<toast'));
-      expect(messages[0].payload.launchArgumentMap['id'], '1');
-      expect(messages[1].payload.rawText, '{"event":"sync"}');
-      expect(messages[2].payload.xml, '<badge value="3" />');
-      expect(messages[3].payload.xml, '<tile><visual /></tile>');
-    });
+        ]);
+        expect(messages[0].payload.rawText, '{"event":"sync"}');
+        expect(messages[1].payload.xml, '<badge value="3" />');
+        expect(messages[2].payload.xml, '<tile><visual /></tile>');
+      },
+    );
 
     test('returns typed channel result', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -184,11 +167,7 @@ void main() {
         service.requestChannel(),
         throwsA(
           isA<WnsChannelRequestException>()
-              .having(
-                (value) => value.code,
-                'code',
-                'CHANNEL_REQUEST_FAILED',
-              )
+              .having((value) => value.code, 'code', 'CHANNEL_REQUEST_FAILED')
               .having(
                 (value) => value.details,
                 'details',

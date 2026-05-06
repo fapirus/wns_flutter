@@ -69,15 +69,15 @@ void main() {
       );
     });
 
-    test('onMessage forwards typed foreground toast events', () async {
+    test('onMessage forwards typed foreground raw events', () async {
       final adapter = PartnerCenterWnsAdapter(
         notificationService: NotificationService(
           channel,
           messageStream: Stream<dynamic>.value({
-            'type': 'toast',
+            'type': 'raw',
             'source': 'foreground',
-            'arguments': 'route=thread&id=5',
-            'xml': '<toast launch="route=thread&amp;id=5" />',
+            'data': {'event': 'sync', 'id': '5'},
+            'rawText': '{"event":"sync","id":"5"}',
             'receivedAt': 1700000000000,
           }),
           messageOpenedAppStream: const Stream<dynamic>.empty(),
@@ -88,13 +88,13 @@ void main() {
         adapter.onMessage,
         emits(
           isA<dynamic>()
-              .having((value) => value.type, 'type', WnsNotificationType.toast)
-              .having((value) => value.payload.xml, 'xml', isNotNull)
+              .having((value) => value.type, 'type', WnsNotificationType.raw)
               .having(
-                (value) => value.payload.launchArgumentMap['id'],
-                'launchArgumentMap id',
-                '5',
-              ),
+                (value) => value.payload.rawText,
+                'rawText',
+                contains('"sync"'),
+              )
+              .having((value) => value.payload.data['id'], 'data id', '5'),
         ),
       );
     });

@@ -463,6 +463,15 @@ void WnsFlutterPlugin::AttachPushNotificationHandler() {
         LogDebug(L"PushNotificationReceived invoked");
 
         try {
+          if (event_args.NotificationType() ==
+              Windows::Networking::PushNotifications::PushNotificationType::
+                  Toast) {
+            LogDebug(
+                L"PushNotificationReceived skipped foreground toast "
+                L"onMessage by activation-only policy");
+            return;
+          }
+
           QueueMessageEvent(BuildIncomingMessagePayload(event_args));
         } catch (...) {
           LogDebug(L"PushNotificationReceived failed to build payload");
