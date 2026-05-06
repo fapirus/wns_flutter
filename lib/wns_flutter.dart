@@ -12,5 +12,3 @@ export 'package:wns_flutter/src/model/wns_activation.dart';
 export 'package:wns_flutter/src/model/wns_channel.dart';
 export 'package:wns_flutter/src/model/wns_message.dart';
 export 'package:wns_flutter/src/model/wns_notification_settings_info.dart';
-export 'package:wns_flutter/src/model/wns_notification_type.dart';
-export 'package:wns_flutter/src/model/wns_payload.dart';

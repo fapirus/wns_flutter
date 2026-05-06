@@ -134,12 +134,7 @@ class WnsDisposedException extends WnsException {
     String? code,
     dynamic details,
     StackTrace? stackTrace,
-  }) : super(
-         message,
-         code: code,
-         details: details,
-         stackTrace: stackTrace,
-       );
+  }) : super(message, code: code, details: details, stackTrace: stackTrace);
 }
 
 class WnsChannelRequestException extends WnsException {
@@ -211,21 +206,6 @@ class WnsSettingsLaunchException extends WnsException {
        );
 }
 
-class WnsPayloadParseException extends WnsException {
-  const WnsPayloadParseException({
-    required String message,
-    String? code,
-    dynamic details,
-    StackTrace? stackTrace,
-  }) : super(
-         message,
-         code: code,
-         details: details,
-         recoveryHint: WnsRecoveryHint.reportBug,
-         stackTrace: stackTrace,
-       );
-}
-
 class WnsActivationParseException extends WnsException {
   const WnsActivationParseException({
     required String message,
@@ -264,10 +244,7 @@ class WnsUnknownException extends WnsException {
     super.code,
     super.stackTrace,
     super.details,
-  }) : super(
-         message,
-         recoveryHint: WnsRecoveryHint.reportBug,
-       );
+  }) : super(message, recoveryHint: WnsRecoveryHint.reportBug);
 }
 
 WnsException wnsExceptionFromPlatformException(PlatformException e) {
@@ -297,13 +274,12 @@ WnsException wnsExceptionFromPlatformException(PlatformException e) {
       details: e.details,
       stackTrace: stackTrace,
     ),
-    'NOTIFICATION_SETTING_FAILED' =>
-      WnsNotificationSettingUnavailableException(
-        message: message,
-        code: e.code,
-        details: e.details,
-        stackTrace: stackTrace,
-      ),
+    'NOTIFICATION_SETTING_FAILED' => WnsNotificationSettingUnavailableException(
+      message: message,
+      code: e.code,
+      details: e.details,
+      stackTrace: stackTrace,
+    ),
     'SETTINGS_LAUNCH_FAILED' => WnsSettingsLaunchException(
       message: message,
       code: e.code,
@@ -360,8 +336,7 @@ class WnsPlatformException extends WnsNativeCallException {
   }
 }
 
-class WnsPackageIdentityNotFoundPlatformException
-    extends WnsPlatformException
+class WnsPackageIdentityNotFoundPlatformException extends WnsPlatformException
     implements WnsPackageIdentityNotFoundException {
   const WnsPackageIdentityNotFoundPlatformException({
     required super.message,
@@ -372,11 +347,17 @@ class WnsPackageIdentityNotFoundPlatformException
   });
 }
 
-class WnsMessageParseException extends WnsPayloadParseException {
+class WnsMessageParseException extends WnsException {
   const WnsMessageParseException({
-    required super.message,
-    super.code,
-    super.details,
-    super.stackTrace,
-  });
+    required String message,
+    String? code,
+    dynamic details,
+    StackTrace? stackTrace,
+  }) : super(
+         message,
+         code: code,
+         details: details,
+         recoveryHint: WnsRecoveryHint.reportBug,
+         stackTrace: stackTrace,
+       );
 }
