@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:wns_flutter/wns_flutter.dart';
 
 import 'package:wns_flutter_example/controller/wns_example_controller.dart';
 import 'package:wns_flutter_example/model/wns_event_log_entry.dart';
@@ -367,39 +368,48 @@ class _SummarySection extends StatelessWidget {
             valueKey: const ValueKey('initial-activation-value'),
             child: initialActivation == null
                 ? const Text('No activation')
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _InlineMetric(
-                        label: 'Type',
-                        value: initialActivation.type.name,
-                      ),
-                      const SizedBox(height: 8),
-                      _InlineMetric(
-                        label: 'Kind',
-                        value: initialActivation.kind.name,
-                      ),
-                      const SizedBox(height: 8),
-                      _SelectablePreviewText(
-                        initialActivation.payload.launchArguments ?? '',
-                      ),
-                      const SizedBox(height: 8),
-                      _InlineMetric(
-                        label: 'Data',
-                        value: _formatMap(initialActivation.payload.data),
-                      ),
-                      if (initialActivation.userInput.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        _InlineMetric(
-                          label: 'User Input',
-                          value: _formatMap(initialActivation.userInput),
-                        ),
-                      ],
-                    ],
-                  ),
+                : _InitialActivationDetails(activation: initialActivation),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _InitialActivationDetails extends StatelessWidget {
+  const _InitialActivationDetails({required this.activation});
+
+  final WnsActivation activation;
+
+  @override
+  Widget build(BuildContext context) {
+    final toast = activation as WnsToastActivation;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _InlineMetric(label: 'Type', value: 'toast activation'),
+        const SizedBox(height: 8),
+        _InlineMetric(label: 'Kind', value: toast.kind.name),
+        const SizedBox(height: 8),
+        _InlineMetric(label: 'Arguments', value: _dashIfEmpty(toast.arguments)),
+        const SizedBox(height: 8),
+        _InlineMetric(
+          label: 'Argument Map',
+          value: _formatMap(toast.argumentMap),
+        ),
+        const SizedBox(height: 8),
+        _InlineMetric(label: 'Action ID', value: _dashIfEmpty(toast.actionId)),
+        const SizedBox(height: 8),
+        _InlineMetric(label: 'Data', value: _formatMap(toast.data)),
+        if (toast.userInput.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          _InlineMetric(
+            label: 'User Input',
+            value: _formatMap(toast.userInput),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -527,11 +537,7 @@ class _EventLogTile extends StatelessWidget {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Chip(label: Text(sourceLabel)),
-                        Chip(label: Text(entry.notificationType.name)),
-                        if (entry.messageSource != null)
-                          Chip(label: Text(entry.messageSource!.name)),
-                        if (entry.activationKind != null)
-                          Chip(label: Text(entry.activationKind!.name)),
+                        Chip(label: Text(entry.eventTypeLabel)),
                         Text(
                           primaryLabel,
                           style: theme.textTheme.bodySmall?.copyWith(
@@ -551,19 +557,7 @@ class _EventLogTile extends StatelessWidget {
                       ),
                     ],
                     const SizedBox(height: 12),
-                    _InlineMetric(
-                      label: 'Arguments',
-                      value: _dashIfEmpty(entry.arguments),
-                    ),
-                    const SizedBox(height: 8),
-                    _InlineMetric(label: 'Data', value: _formatMap(entry.data)),
-                    if (entry.userInput.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      _InlineMetric(
-                        label: 'User Input',
-                        value: _formatMap(entry.userInput),
-                      ),
-                    ],
+                    ..._buildPrimaryFields(entry.primaryFields),
                     if (entry.rawPayload != null &&
                         entry.rawPayload!.trim().isNotEmpty) ...[
                       const SizedBox(height: 10),
@@ -758,6 +752,23 @@ class _InlineMetric extends StatelessWidget {
   }
 }
 
+List<Widget> _buildPrimaryFields(Map<String, String> fields) {
+  if (fields.isEmpty) {
+    return const <Widget>[];
+  }
+
+  final widgets = <Widget>[];
+  var isFirst = true;
+  for (final entry in fields.entries) {
+    if (!isFirst) {
+      widgets.add(const SizedBox(height: 8));
+    }
+    widgets.add(_InlineMetric(label: entry.key, value: entry.value));
+    isFirst = false;
+  }
+  return widgets;
+}
+
 String _formatMap(Map<String, String> data) {
   if (data.isEmpty) {
     return '{}';
@@ -770,8 +781,8 @@ String _formatPayload(String payload) {
   return payload.trim().isEmpty ? '-' : payload.trim();
 }
 
-String _dashIfEmpty(String value) {
-  return value.trim().isEmpty ? '-' : value;
+String _dashIfEmpty(String? value) {
+  return value == null || value.trim().isEmpty ? '-' : value;
 }
 
 String _truncate(String value, int maxLength) {

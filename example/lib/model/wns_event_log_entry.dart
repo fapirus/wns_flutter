@@ -1,35 +1,23 @@
 import 'package:flutter/foundation.dart';
-import 'package:wns_flutter/wns_flutter.dart';
 
-enum WnsEventLogSource {
-  foregroundMessage,
-  openedApp,
-}
+enum WnsEventLogSource { foregroundMessage, openedApp }
 
 @immutable
 class WnsEventLogEntry {
   const WnsEventLogEntry({
     required this.source,
+    required this.eventTypeLabel,
     required this.loggedAt,
-    required this.arguments,
-    required this.data,
-    required this.userInput,
-    this.notificationType = WnsNotificationType.unknown,
-    this.messageSource,
-    this.activationKind,
     this.sourceTimestamp,
+    this.primaryFields = const <String, String>{},
     this.rawPayload,
   });
 
   final WnsEventLogSource source;
+  final String eventTypeLabel;
   final DateTime loggedAt;
   final DateTime? sourceTimestamp;
-  final WnsNotificationType notificationType;
-  final WnsMessageSource? messageSource;
-  final WnsActivationKind? activationKind;
-  final String arguments;
-  final Map<String, String> data;
-  final Map<String, String> userInput;
+  final Map<String, String> primaryFields;
   final String? rawPayload;
 
   DateTime get displayTimestamp => sourceTimestamp ?? loggedAt;

@@ -91,34 +91,61 @@ class WnsExampleController extends ChangeNotifier {
   }
 
   void _handleIncomingMessage(WnsMessage message) {
-    _addMessageLog(
-      WnsEventLogEntry(
+    final entry = switch (message) {
+      WnsRawMessage() => WnsEventLogEntry(
         source: WnsEventLogSource.foregroundMessage,
+        eventTypeLabel: 'raw',
         loggedAt: _now(),
         sourceTimestamp: message.receivedAt,
-        notificationType: message.type,
-        messageSource: message.source,
-        arguments: message.payload.launchArguments ?? '',
-        data: message.payload.data,
-        userInput: const <String, String>{},
-        rawPayload: message.payload.xml ?? message.payload.rawText,
+        primaryFields: <String, String>{
+          'Text': _dashIfEmpty(message.text),
+          'Data': _formatMap(message.data),
+        },
+        rawPayload: message.rawPayload,
       ),
-    );
+      WnsBadgeMessage() => WnsEventLogEntry(
+        source: WnsEventLogSource.foregroundMessage,
+        eventTypeLabel: 'badge',
+        loggedAt: _now(),
+        sourceTimestamp: message.receivedAt,
+        primaryFields: <String, String>{
+          'Value': message.value?.toString() ?? '-',
+          'Glyph': _dashIfEmpty(message.glyph),
+        },
+        rawPayload: message.rawPayload,
+      ),
+      WnsTileMessage() => WnsEventLogEntry(
+        source: WnsEventLogSource.foregroundMessage,
+        eventTypeLabel: 'tile',
+        loggedAt: _now(),
+        sourceTimestamp: message.receivedAt,
+        primaryFields: const <String, String>{'XML': 'See payload details'},
+        rawPayload: message.rawPayload ?? message.xml,
+      ),
+    };
+
+    _addMessageLog(entry);
   }
 
   void _handleActivation(WnsActivation activation) {
-    _addActivationLog(
-      WnsEventLogEntry(
+    final entry = switch (activation) {
+      WnsToastActivation() => WnsEventLogEntry(
         source: WnsEventLogSource.openedApp,
+        eventTypeLabel: 'toast activation',
         loggedAt: _now(),
-        notificationType: activation.type,
-        activationKind: activation.kind,
-        arguments: activation.payload.launchArguments ?? '',
-        data: activation.payload.data,
-        userInput: activation.userInput,
-        rawPayload: activation.payload.xml ?? activation.payload.rawText,
+        primaryFields: <String, String>{
+          'Kind': activation.kind.name,
+          'Arguments': _dashIfEmpty(activation.arguments),
+          'Argument Map': _formatMap(activation.argumentMap),
+          'Action ID': _dashIfEmpty(activation.actionId),
+          'User Input': _formatMap(activation.userInput),
+          'Data': _formatMap(activation.data),
+        },
+        rawPayload: activation.rawPayload ?? activation.xml,
       ),
-    );
+    };
+
+    _addActivationLog(entry);
   }
 
   void _addMessageLog(WnsEventLogEntry entry) {
@@ -143,4 +170,16 @@ class WnsExampleController extends ChangeNotifier {
     _activationSubscription?.cancel();
     super.dispose();
   }
+}
+
+String _dashIfEmpty(String? value) {
+  return value == null || value.isEmpty ? '-' : value;
+}
+
+String _formatMap(Map<String, String> data) {
+  if (data.isEmpty) {
+    return '{}';
+  }
+
+  return data.entries.map((entry) => '${entry.key}=${entry.value}').join(', ');
 }

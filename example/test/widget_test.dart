@@ -60,55 +60,43 @@ void main() {
       await tester.ensureVisible(find.text('Refresh Initial Activation'));
       await tester.tap(find.text('Refresh Initial Activation'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('route=inbox&id=42'), findsOneWidget);
+      expect(
+        find.textContaining('route=inbox&id=42', findRichText: true),
+        findsOneWidget,
+      );
 
       client.addIncoming(
-        WnsMessage(
-          type: WnsNotificationType.raw,
-          payload: const WnsPayload(
-            data: <String, String>{'event': 'sync'},
-            rawText: '{"event":"sync"}',
-          ),
+        WnsRawMessage(
           receivedAt: DateTime(2025, 1, 2, 10, 12, 13),
-          source: WnsMessageSource.foreground,
+          rawPayload: '{"event":"sync"}',
+          text: '{"event":"sync"}',
+          data: const <String, String>{'event': 'sync'},
         ),
       );
       client.addIncoming(
-        WnsMessage(
-          type: WnsNotificationType.badge,
-          payload: const WnsPayload(
-            data: <String, String>{'count': '7'},
-            xml: '<badge value="7" />',
-          ),
+        WnsBadgeMessage(
           receivedAt: DateTime(2025, 1, 2, 10, 13, 14),
-          source: WnsMessageSource.foreground,
+          rawPayload: '<badge value="7" />',
+          value: 7,
         ),
       );
       client.addIncoming(
-        WnsMessage(
-          type: WnsNotificationType.tile,
-          payload: const WnsPayload(
-            data: <String, String>{'tile': 'orders'},
-            xml: '<tile><visual /></tile>',
-          ),
+        WnsTileMessage(
           receivedAt: DateTime(2025, 1, 2, 10, 14, 15),
-          source: WnsMessageSource.foreground,
+          rawPayload: '<tile><visual /></tile>',
+          xml: '<tile><visual /></tile>',
         ),
       );
       client.addActivation(
-        const WnsActivation(
-          type: WnsNotificationType.toast,
-          kind: WnsActivationKind.foregroundForward,
-          payload: WnsPayload(
-            data: <String, String>{'route': 'settings', 'action': 'open'},
-            xml: '<toast>settings</toast>',
-            launchArguments: 'route=settings&action=open',
-            launchArgumentMap: <String, String>{
-              'route': 'settings',
-              'action': 'open',
-            },
-          ),
+        const WnsToastActivation(
+          kind: WnsToastActivationKind.foregroundForward,
+          arguments: 'route=settings&action=open',
+          argumentMap: <String, String>{'route': 'settings', 'action': 'open'},
+          actionId: 'open',
           userInput: <String, String>{'action': 'open'},
+          xml: '<toast>settings</toast>',
+          data: <String, String>{'route': 'settings', 'action': 'open'},
+          rawPayload: '<toast>settings</toast>',
         ),
       );
 
@@ -116,7 +104,7 @@ void main() {
 
       expect(find.text('Foreground'), findsNWidgets(3));
       expect(find.text('Opened App'), findsOneWidget);
-      expect(find.text('toast'), findsOneWidget);
+      expect(find.text('toast activation'), findsOneWidget);
       expect(find.text('raw'), findsOneWidget);
       expect(find.text('badge'), findsOneWidget);
       expect(find.text('tile'), findsOneWidget);
@@ -208,15 +196,13 @@ class _FakeWnsDemoClient implements WnsDemoClient {
 
   @override
   Future<WnsActivation?> getInitialActivation() async {
-    return const WnsActivation(
-      type: WnsNotificationType.toast,
-      kind: WnsActivationKind.launch,
-      payload: WnsPayload(
-        data: <String, String>{'route': 'inbox', 'id': '42'},
-        launchArguments: 'route=inbox&id=42',
-        launchArgumentMap: <String, String>{'route': 'inbox', 'id': '42'},
-      ),
+    return const WnsToastActivation(
+      kind: WnsToastActivationKind.launch,
+      arguments: 'route=inbox&id=42',
+      argumentMap: <String, String>{'route': 'inbox', 'id': '42'},
+      data: <String, String>{'route': 'inbox', 'id': '42'},
       userInput: <String, String>{'action': 'view'},
+      rawPayload: 'route=inbox&id=42',
     );
   }
 
