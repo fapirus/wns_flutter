@@ -46,6 +46,53 @@ HWND FindExistingWindow() {
   return context.found_window;
 }
 
+void BringWindowToForeground(HWND target_window) {
+  if (target_window == nullptr) {
+    return;
+  }
+
+  DWORD target_process_id = 0;
+  DWORD target_thread_id =
+      ::GetWindowThreadProcessId(target_window, &target_process_id);
+  DWORD current_thread_id = ::GetCurrentThreadId();
+  DWORD foreground_thread_id =
+      ::GetWindowThreadProcessId(::GetForegroundWindow(), nullptr);
+
+  if (target_process_id != 0) {
+    ::AllowSetForegroundWindow(target_process_id);
+  }
+
+  if (::IsIconic(target_window)) {
+    ::ShowWindowAsync(target_window, SW_RESTORE);
+  } else {
+    ::ShowWindowAsync(target_window, SW_SHOW);
+  }
+
+  if (foreground_thread_id != 0 && foreground_thread_id != current_thread_id) {
+    ::AttachThreadInput(current_thread_id, foreground_thread_id, TRUE);
+  }
+  if (target_thread_id != 0 && target_thread_id != current_thread_id) {
+    ::AttachThreadInput(current_thread_id, target_thread_id, TRUE);
+  }
+
+  ::BringWindowToTop(target_window);
+  ::SetForegroundWindow(target_window);
+  ::SetActiveWindow(target_window);
+  ::SetFocus(target_window);
+
+  if (target_thread_id != 0 && target_thread_id != current_thread_id) {
+    ::AttachThreadInput(current_thread_id, target_thread_id, FALSE);
+  }
+  if (foreground_thread_id != 0 && foreground_thread_id != current_thread_id) {
+    ::AttachThreadInput(current_thread_id, foreground_thread_id, FALSE);
+  }
+
+  ::SetWindowPos(target_window, HWND_TOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+  ::SetWindowPos(target_window, HWND_NOTOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+}
+
 std::wstring JoinActivationArguments() {
   int argument_count = 0;
   LPWSTR* argv = ::CommandLineToArgvW(::GetCommandLineW(), &argument_count);
@@ -87,10 +134,7 @@ void ForwardActivationToExistingWindow(HWND target_window,
                   reinterpret_cast<LPARAM>(&copy_data));
   }
 
-  if (::IsIconic(target_window)) {
-    ::ShowWindow(target_window, SW_RESTORE);
-  }
-  ::SetForegroundWindow(target_window);
+  BringWindowToForeground(target_window);
 }
 
 }  // namespace

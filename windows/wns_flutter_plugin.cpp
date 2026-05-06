@@ -190,6 +190,49 @@ int64_t CurrentEpochMillis() {
   return now.time_since_epoch().count();
 }
 
+void BringWindowToForeground(HWND target_window) {
+  if (target_window == nullptr) {
+    return;
+  }
+
+  DWORD target_thread_id = ::GetWindowThreadProcessId(target_window, nullptr);
+  DWORD current_thread_id = ::GetCurrentThreadId();
+  DWORD foreground_thread_id =
+      ::GetWindowThreadProcessId(::GetForegroundWindow(), nullptr);
+
+  ::AllowSetForegroundWindow(::GetCurrentProcessId());
+
+  if (::IsIconic(target_window)) {
+    ::ShowWindowAsync(target_window, SW_RESTORE);
+  } else {
+    ::ShowWindowAsync(target_window, SW_SHOW);
+  }
+
+  if (foreground_thread_id != 0 && foreground_thread_id != current_thread_id) {
+    ::AttachThreadInput(current_thread_id, foreground_thread_id, TRUE);
+  }
+  if (target_thread_id != 0 && target_thread_id != current_thread_id) {
+    ::AttachThreadInput(current_thread_id, target_thread_id, TRUE);
+  }
+
+  ::BringWindowToTop(target_window);
+  ::SetForegroundWindow(target_window);
+  ::SetActiveWindow(target_window);
+  ::SetFocus(target_window);
+
+  if (target_thread_id != 0 && target_thread_id != current_thread_id) {
+    ::AttachThreadInput(current_thread_id, target_thread_id, FALSE);
+  }
+  if (foreground_thread_id != 0 && foreground_thread_id != current_thread_id) {
+    ::AttachThreadInput(current_thread_id, foreground_thread_id, FALSE);
+  }
+
+  ::SetWindowPos(target_window, HWND_TOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+  ::SetWindowPos(target_window, HWND_NOTOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+}
+
 std::string GetToastLaunchArguments(const ToastNotification& toast) {
   try {
     auto document = toast.Content();
@@ -459,10 +502,7 @@ std::optional<LRESULT> WnsFlutterPlugin::HandleWindowProc(
     std::wstring arguments(payload,
                            (copy_data->cbData / sizeof(wchar_t)) - 1);
     QueueOpenedAppEvent(BuildForwardedActivationPayload(arguments));
-    if (::IsIconic(hwnd)) {
-      ::ShowWindow(hwnd, SW_RESTORE);
-    }
-    ::SetForegroundWindow(hwnd);
+    BringWindowToForeground(hwnd);
     return std::optional<LRESULT>(TRUE);
   }
 
