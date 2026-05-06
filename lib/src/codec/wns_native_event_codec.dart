@@ -1,10 +1,9 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:wns_flutter/src/exception/exception.dart';
 import 'package:wns_flutter/src/model/wns_activation.dart';
 import 'package:wns_flutter/src/model/wns_message.dart';
-import 'package:wns_flutter/src/model/wns_notification_type.dart';
-import 'package:wns_flutter/src/model/wns_payload.dart';
 
 WnsMessage decodeWnsMessageEvent(dynamic event) {
   final map = _requireMap(
@@ -13,17 +12,41 @@ WnsMessage decodeWnsMessageEvent(dynamic event) {
     code: 'INVALID_MESSAGE_PAYLOAD',
   );
 
-  return WnsMessage(
-    type: _notificationTypeFrom(map['type']),
-    payload: _payloadFrom(map),
-    receivedAt: _dateTimeFrom(map['receivedAt']) ?? DateTime.now(),
-    source: _messageSourceFrom(map['source']),
-  );
+  final receivedAt = _dateTimeFrom(map['receivedAt']) ?? DateTime.now();
+  final rawText = _stringOrNull(map['rawText']);
+  final xml = _stringOrNull(map['xml']);
+  final rawPayload = _stringOrNull(map['rawPayload']);
+
+  return switch (_normalized(map['type'])) {
+    'raw' => WnsRawMessage(
+      receivedAt: receivedAt,
+      rawPayload: rawPayload ?? rawText,
+      text: rawText,
+      bytes: _uint8ListFrom(map['rawBytes']),
+      data: _dataFromMapOrRawJson(map['data'], rawText),
+    ),
+    'badge' => WnsBadgeMessage(
+      receivedAt: receivedAt,
+      rawPayload: rawPayload ?? xml,
+      value: _intOrNull(map['value']) ?? _badgeValueFromXml(xml),
+      glyph: _stringOrNull(map['glyph']) ?? _badgeGlyphFromXml(xml),
+    ),
+    'tile' => WnsTileMessage(
+      receivedAt: receivedAt,
+      rawPayload: rawPayload ?? xml,
+      xml: xml,
+    ),
+    _ => throw WnsMessageParseException(
+      message: 'Unsupported incoming message event type.',
+      code: 'UNSUPPORTED_MESSAGE_TYPE',
+      details: map,
+    ),
+  };
 }
 
 WnsActivation decodeWnsActivationEvent(
   dynamic event, {
-  WnsActivationKind fallbackKind = WnsActivationKind.unknown,
+  WnsToastActivationKind fallbackKind = WnsToastActivationKind.unknown,
 }) {
   final map = _requireMap(
     event,
@@ -32,12 +55,38 @@ WnsActivation decodeWnsActivationEvent(
     activation: true,
   );
 
-  return WnsActivation(
-    type: _notificationTypeFrom(map['type']),
-    kind: _activationKindFrom(map['kind'], fallbackKind: fallbackKind),
-    payload: _payloadFrom(map),
+  if (_normalized(map['type']) != 'toast') {
+    throw WnsActivationParseException(
+      message: 'Unsupported activation event type.',
+      code: 'UNSUPPORTED_ACTIVATION_TYPE',
+      details: map,
+    );
+  }
+
+  final arguments = _stringOrNull(map['arguments']) ?? '';
+  final argumentMap = _parseArguments(arguments);
+  final data = _stringMapFrom(map['data']);
+  final xml = _stringOrNull(map['xml']);
+  final rawPayload =
+      _stringOrNull(map['rawPayload']) ??
+      xml ??
+      _stringOrNull(map['rawText']) ??
+      (arguments.isEmpty ? null : arguments);
+  final actionId =
+      _stringOrNull(map['actionId']) ??
+      argumentMap['actionId'] ??
+      argumentMap['action'];
+
+  return WnsToastActivation(
+    kind: _toastActivationKindFrom(map['kind'], fallbackKind: fallbackKind),
+    arguments: arguments,
+    argumentMap: argumentMap,
+    actionId: actionId,
     userInput: _stringMapFrom(map['userInput']),
+    xml: xml,
+    data: data.isEmpty ? argumentMap : data,
     activatedAt: _dateTimeFrom(map['activatedAt']),
+    rawPayload: rawPayload,
   );
 }
 
@@ -63,69 +112,46 @@ Map<Object?, Object?> _requireMap(
     );
   }
 
-  throw WnsMessageParseException(
-    message: message,
-    code: code,
-    details: value,
-  );
+  throw WnsMessageParseException(message: message, code: code, details: value);
 }
 
-WnsPayload _payloadFrom(Map<Object?, Object?> map) {
-  final arguments = _stringOrNull(map['arguments']);
-  final argumentMap = _parseArguments(arguments ?? '');
-  final data = _stringMapFrom(map['data']);
-
-  return WnsPayload(
-    rawText: _stringOrNull(map['rawText']),
-    rawBytes: _uint8ListFrom(map['rawBytes']),
-    xml: _stringOrNull(map['xml']),
-    data: data.isEmpty ? argumentMap : data,
-    launchArguments: arguments == null || arguments.isEmpty ? null : arguments,
-    launchArgumentMap: argumentMap,
-  );
-}
-
-WnsNotificationType _notificationTypeFrom(dynamic value) {
-  return switch (_normalized(value)) {
-    'raw' => WnsNotificationType.raw,
-    'toast' => WnsNotificationType.toast,
-    'badge' => WnsNotificationType.badge,
-    'tile' => WnsNotificationType.tile,
-    _ => WnsNotificationType.unknown,
-  };
-}
-
-WnsMessageSource _messageSourceFrom(dynamic value) {
-  return switch (_normalized(value)) {
-    'foreground' => WnsMessageSource.foreground,
-    'background' => WnsMessageSource.background,
-    'nativequeue' || 'native_queue' => WnsMessageSource.nativeQueue,
-    _ => WnsMessageSource.unknown,
-  };
-}
-
-WnsActivationKind _activationKindFrom(
+WnsToastActivationKind _toastActivationKindFrom(
   dynamic value, {
-  required WnsActivationKind fallbackKind,
+  required WnsToastActivationKind fallbackKind,
 }) {
   return switch (_normalized(value)) {
-    'launch' => WnsActivationKind.launch,
-    'action' => WnsActivationKind.action,
-    'backgroundpush' || 'background_push' => WnsActivationKind.backgroundPush,
-    'foregroundforward' || 'foreground_forward' =>
-      WnsActivationKind.foregroundForward,
+    'launch' => WnsToastActivationKind.launch,
+    'action' => WnsToastActivationKind.action,
+    'foregroundforward' ||
+    'foreground_forward' => WnsToastActivationKind.foregroundForward,
     _ => fallbackKind,
   };
+}
+
+Map<String, String> _dataFromMapOrRawJson(dynamic value, String? rawText) {
+  final data = _stringMapFrom(value);
+  if (data.isNotEmpty || rawText == null || rawText.isEmpty) {
+    return data;
+  }
+
+  try {
+    final decoded = jsonDecode(rawText);
+    if (decoded is Map) {
+      return _stringMapFrom(decoded);
+    }
+  } on FormatException {
+    return const <String, String>{};
+  }
+
+  return const <String, String>{};
 }
 
 Map<String, String> _stringMapFrom(dynamic value) {
   if (value is Map) {
     return Map<String, String>.unmodifiable(
       value.map(
-        (key, entryValue) => MapEntry(
-          key.toString(),
-          entryValue?.toString() ?? '',
-        ),
+        (key, entryValue) =>
+            MapEntry(key.toString(), entryValue?.toString() ?? ''),
       ),
     );
   }
@@ -173,6 +199,32 @@ Uint8List? _uint8ListFrom(dynamic value) {
   }
 
   return null;
+}
+
+int? _intOrNull(dynamic value) {
+  if (value is int) {
+    return value;
+  }
+
+  return int.tryParse(value?.toString() ?? '');
+}
+
+int? _badgeValueFromXml(String? xml) {
+  final value = _xmlAttribute(xml, 'value');
+  return value == null ? null : int.tryParse(value);
+}
+
+String? _badgeGlyphFromXml(String? xml) {
+  return _xmlAttribute(xml, 'glyph');
+}
+
+String? _xmlAttribute(String? xml, String name) {
+  if (xml == null || xml.isEmpty) {
+    return null;
+  }
+
+  final pattern = RegExp("$name\\s*=\\s*[\"']([^\"']+)[\"']");
+  return pattern.firstMatch(xml)?.group(1);
 }
 
 String? _stringOrNull(dynamic value) {

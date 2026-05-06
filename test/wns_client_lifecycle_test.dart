@@ -7,8 +7,6 @@ import 'package:wns_flutter/src/exception/exception.dart';
 import 'package:wns_flutter/src/model/wns_activation.dart';
 import 'package:wns_flutter/src/model/wns_channel.dart';
 import 'package:wns_flutter/src/model/wns_message.dart';
-import 'package:wns_flutter/src/model/wns_notification_type.dart';
-import 'package:wns_flutter/src/model/wns_payload.dart';
 
 void main() {
   group('WnsClient lifecycle', () {
@@ -61,7 +59,11 @@ void main() {
 
       expect(adapter.getInitialActivationCount, 1);
       expect(activation, isNotNull);
-      expect(activation!.kind, WnsActivationKind.launch);
+      expect(activation, isA<WnsToastActivation>());
+      expect(
+        (activation! as WnsToastActivation).kind,
+        WnsToastActivationKind.launch,
+      );
     });
 
     test('use after dispose throws disposed exception', () async {
@@ -93,8 +95,7 @@ class _FakeWnsPlatformAdapter implements WnsPlatformAdapter {
   Stream<WnsMessage> get onMessage => const Stream<WnsMessage>.empty();
 
   @override
-  Stream<WnsActivation> get onActivation =>
-      const Stream<WnsActivation>.empty();
+  Stream<WnsActivation> get onActivation => const Stream<WnsActivation>.empty();
 
   @override
   Future<void> initialize() async {
@@ -118,10 +119,10 @@ class _FakeWnsPlatformAdapter implements WnsPlatformAdapter {
   @override
   Future<WnsActivation?> getInitialActivation() async {
     getInitialActivationCount += 1;
-    return const WnsActivation(
-      type: WnsNotificationType.toast,
-      kind: WnsActivationKind.launch,
-      payload: WnsPayload(launchArguments: 'route=inbox'),
+    return const WnsToastActivation(
+      kind: WnsToastActivationKind.launch,
+      arguments: 'route=inbox',
+      argumentMap: <String, String>{'route': 'inbox'},
     );
   }
 

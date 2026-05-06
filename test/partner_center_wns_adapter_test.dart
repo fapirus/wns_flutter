@@ -2,7 +2,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wns_flutter/src/adapter/partner_center/partner_center_wns_adapter.dart';
 import 'package:wns_flutter/src/config/partner_center_wns_options.dart';
-import 'package:wns_flutter/src/model/wns_notification_type.dart';
+import 'package:wns_flutter/src/model/wns_activation.dart';
+import 'package:wns_flutter/src/model/wns_message.dart';
 import 'package:wns_flutter/src/service/notification_service.dart';
 
 void main() {
@@ -87,14 +88,9 @@ void main() {
       await expectLater(
         adapter.onMessage,
         emits(
-          isA<dynamic>()
-              .having((value) => value.type, 'type', WnsNotificationType.raw)
-              .having(
-                (value) => value.payload.rawText,
-                'rawText',
-                contains('"sync"'),
-              )
-              .having((value) => value.payload.data['id'], 'data id', '5'),
+          isA<WnsRawMessage>()
+              .having((value) => value.text, 'text', contains('"sync"'))
+              .having((value) => value.data['id'], 'data id', '5'),
         ),
       );
     });
@@ -116,13 +112,13 @@ void main() {
       await expectLater(
         adapter.onActivation,
         emits(
-          isA<dynamic>()
-              .having((value) => value.type, 'type', WnsNotificationType.toast)
+          isA<WnsToastActivation>()
               .having(
-                (value) => value.payload.launchArgumentMap['id'],
-                'launchArgumentMap id',
-                '5',
+                (value) => value.kind,
+                'kind',
+                WnsToastActivationKind.foregroundForward,
               )
+              .having((value) => value.argumentMap['id'], 'argumentMap id', '5')
               .having((value) => value.userInput['reply'], 'reply', 'ok'),
         ),
       );

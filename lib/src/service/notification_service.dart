@@ -5,7 +5,6 @@ import 'package:wns_flutter/src/internal/wns_logger.dart';
 import 'package:wns_flutter/src/model/wns_activation.dart';
 import 'package:wns_flutter/src/model/wns_channel.dart';
 import 'package:wns_flutter/src/model/wns_message.dart';
-import 'package:wns_flutter/src/model/wns_notification_type.dart';
 
 class NotificationService {
   static const String _initializeMethod = 'initialize';
@@ -39,7 +38,7 @@ class NotificationService {
   Stream<WnsActivation> get onActivation => _messageOpenedAppEvents.map(
     (event) => decodeWnsActivationEvent(
       event,
-      fallbackKind: WnsActivationKind.foregroundForward,
+      fallbackKind: WnsToastActivationKind.foregroundForward,
     ),
   );
 
@@ -104,7 +103,7 @@ class NotificationService {
 
       return decodeWnsActivationEvent(
         result,
-        fallbackKind: WnsActivationKind.launch,
+        fallbackKind: WnsToastActivationKind.launch,
       );
     } on PlatformException catch (e) {
       throw wnsExceptionFromPlatformException(e);
@@ -114,5 +113,4 @@ class NotificationService {
       throw WnsUnknownException(message: e.toString(), stackTrace: stack);
     }
   }
-
 }
