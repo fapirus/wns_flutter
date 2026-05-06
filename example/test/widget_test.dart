@@ -25,20 +25,21 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('desktop-shell')), findsOneWidget);
-      expect(
-        find.text('Desktop-style WNS validation console'),
-        findsOneWidget,
-      );
+      expect(find.text('Desktop-style WNS validation console'), findsOneWidget);
       expect(find.text('Notification Setting'), findsOneWidget);
       expect(find.text('Partner Center WNS'), findsWidgets);
-      expect(find.text('Event Timeline'), findsOneWidget);
+      expect(find.text('Foreground Messages'), findsOneWidget);
+      expect(find.text('Notification Activations'), findsOneWidget);
       expect(find.text('Clear Event Logs'), findsOneWidget);
       expect(find.byKey(const ValueKey('theme-mode-menu')), findsOneWidget);
       expect(find.text('Initial Activation Checked At'), findsOneWidget);
 
       await tester.tap(find.text('Get Settings Info'));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('notification-status-value')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('notification-status-value')),
+        findsOneWidget,
+      );
       expect(find.textContaining('authorized'), findsWidgets);
 
       await tester.ensureVisible(find.text('Initialize Client'));
@@ -50,7 +51,10 @@ void main() {
       await tester.ensureVisible(find.text('Request Channel'));
       await tester.tap(find.text('Request Channel'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('https://notify.windows.com/channel/demo'), findsOneWidget);
+      expect(
+        find.textContaining('https://notify.windows.com/channel/demo'),
+        findsOneWidget,
+      );
       expect(find.textContaining('isExpired=false'), findsOneWidget);
 
       await tester.ensureVisible(find.text('Refresh Initial Activation'));
@@ -58,22 +62,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('route=inbox&id=42'), findsOneWidget);
 
-      client.addIncoming(
-        WnsMessage(
-          type: WnsNotificationType.toast,
-          payload: const WnsPayload(
-            data: <String, String>{'route': 'orders', 'id': '100'},
-            xml: '<toast>orders-100</toast>',
-            launchArguments: 'route=orders&id=100',
-            launchArgumentMap: <String, String>{
-              'route': 'orders',
-              'id': '100',
-            },
-          ),
-          receivedAt: DateTime(2025, 1, 2, 10, 11, 12),
-          source: WnsMessageSource.foreground,
-        ),
-      );
       client.addIncoming(
         WnsMessage(
           type: WnsNotificationType.raw,
@@ -126,15 +114,15 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.text('Foreground'), findsNWidgets(4));
+      expect(find.text('Foreground'), findsNWidgets(3));
       expect(find.text('Opened App'), findsOneWidget);
-      expect(find.text('toast'), findsWidgets);
+      expect(find.text('toast'), findsOneWidget);
       expect(find.text('raw'), findsOneWidget);
       expect(find.text('badge'), findsOneWidget);
       expect(find.text('tile'), findsOneWidget);
       expect(
         find.textContaining('route=orders&id=100', findRichText: true),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.textContaining('event=sync', findRichText: true),
@@ -151,7 +139,14 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('clear-event-logs-button')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('empty-timeline-message')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('empty-foreground-messages-message')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('empty-activation-events-message')),
+        findsOneWidget,
+      );
     },
   );
 

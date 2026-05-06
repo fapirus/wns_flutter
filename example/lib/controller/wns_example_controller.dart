@@ -30,7 +30,8 @@ class WnsExampleController extends ChangeNotifier {
   WnsActivation? _initialActivation;
   DateTime? _initialActivationCheckedAt;
   WnsNotificationSettingsInfo? _notificationSettingsInfo;
-  final List<WnsEventLogEntry> _eventLogs = <WnsEventLogEntry>[];
+  final List<WnsEventLogEntry> _messageLogs = <WnsEventLogEntry>[];
+  final List<WnsEventLogEntry> _activationLogs = <WnsEventLogEntry>[];
 
   bool get initialized => _initialized;
   String get channelUri => _channelUri;
@@ -40,9 +41,11 @@ class WnsExampleController extends ChangeNotifier {
   DateTime? get initialActivationCheckedAt => _initialActivationCheckedAt;
   WnsNotificationSettingsInfo? get notificationSettingsInfo =>
       _notificationSettingsInfo;
-  List<WnsEventLogEntry> get eventLogs => List<WnsEventLogEntry>.unmodifiable(
-    _eventLogs,
-  );
+  List<WnsEventLogEntry> get messageLogs =>
+      List<WnsEventLogEntry>.unmodifiable(_messageLogs);
+  List<WnsEventLogEntry> get activationLogs =>
+      List<WnsEventLogEntry>.unmodifiable(_activationLogs);
+  int get eventLogCount => _messageLogs.length + _activationLogs.length;
 
   Future<void> initialize() async {
     await _client.initialize();
@@ -82,12 +85,13 @@ class WnsExampleController extends ChangeNotifier {
   }
 
   void clearEventLogs() {
-    _eventLogs.clear();
+    _messageLogs.clear();
+    _activationLogs.clear();
     notifyListeners();
   }
 
   void _handleIncomingMessage(WnsMessage message) {
-    _addLog(
+    _addMessageLog(
       WnsEventLogEntry(
         source: WnsEventLogSource.foregroundMessage,
         loggedAt: _now(),
@@ -103,7 +107,7 @@ class WnsExampleController extends ChangeNotifier {
   }
 
   void _handleActivation(WnsActivation activation) {
-    _addLog(
+    _addActivationLog(
       WnsEventLogEntry(
         source: WnsEventLogSource.openedApp,
         loggedAt: _now(),
@@ -117,10 +121,18 @@ class WnsExampleController extends ChangeNotifier {
     );
   }
 
-  void _addLog(WnsEventLogEntry entry) {
-    _eventLogs.insert(0, entry);
-    if (_eventLogs.length > _maxEntries) {
-      _eventLogs.removeRange(_maxEntries, _eventLogs.length);
+  void _addMessageLog(WnsEventLogEntry entry) {
+    _addLog(_messageLogs, entry);
+  }
+
+  void _addActivationLog(WnsEventLogEntry entry) {
+    _addLog(_activationLogs, entry);
+  }
+
+  void _addLog(List<WnsEventLogEntry> logs, WnsEventLogEntry entry) {
+    logs.insert(0, entry);
+    if (logs.length > _maxEntries) {
+      logs.removeRange(_maxEntries, logs.length);
     }
     notifyListeners();
   }

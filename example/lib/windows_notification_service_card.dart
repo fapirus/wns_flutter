@@ -60,7 +60,7 @@ class _WindowsNotificationServiceCardState
                       label: const Text('Packaged Validation Sample'),
                     ),
                     Text(
-                      '${_controller.eventLogs.length} events captured',
+                      '${_controller.eventLogCount} events captured',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
@@ -107,7 +107,13 @@ class _WindowsNotificationServiceCardState
                         children: [
                           leftColumn,
                           const SizedBox(height: 16),
-                          _EventTimelineSection(entries: _controller.eventLogs),
+                          _EventLogSection.foregroundMessages(
+                            entries: _controller.messageLogs,
+                          ),
+                          const SizedBox(height: 16),
+                          _EventLogSection.notificationActivations(
+                            entries: _controller.activationLogs,
+                          ),
                         ],
                       );
                     }
@@ -118,8 +124,16 @@ class _WindowsNotificationServiceCardState
                         SizedBox(width: 340, child: leftColumn),
                         const SizedBox(width: 16),
                         Expanded(
-                          child: _EventTimelineSection(
-                            entries: _controller.eventLogs,
+                          child: Column(
+                            children: [
+                              _EventLogSection.foregroundMessages(
+                                entries: _controller.messageLogs,
+                              ),
+                              const SizedBox(height: 16),
+                              _EventLogSection.notificationActivations(
+                                entries: _controller.activationLogs,
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -188,10 +202,7 @@ class _WindowsNotificationServiceCardState
 }
 
 class _ControlsSection extends StatelessWidget {
-  const _ControlsSection({
-    required this.controller,
-    required this.onError,
-  });
+  const _ControlsSection({required this.controller, required this.onError});
 
   final WnsExampleController controller;
   final Future<void> Function(Object error) onError;
@@ -268,10 +279,7 @@ class _ControlsSection extends StatelessWidget {
 }
 
 class _SummarySection extends StatelessWidget {
-  const _SummarySection({
-    required this.controller,
-    required this.onError,
-  });
+  const _SummarySection({required this.controller, required this.onError});
 
   final WnsExampleController controller;
   final Future<void> Function(Object error) onError;
@@ -396,32 +404,68 @@ class _SummarySection extends StatelessWidget {
   }
 }
 
-class _EventTimelineSection extends StatelessWidget {
-  const _EventTimelineSection({required this.entries});
+class _EventLogSection extends StatelessWidget {
+  const _EventLogSection({
+    required this.title,
+    required this.subtitle,
+    required this.emptyMessage,
+    required this.emptyMessageKey,
+    required this.entryKeyPrefix,
+    required this.entries,
+  });
 
+  const _EventLogSection.foregroundMessages({
+    required List<WnsEventLogEntry> entries,
+  }) : this(
+         title: 'Foreground Messages',
+         subtitle:
+             'Raw, badge, and tile messages received while the app is running.',
+         emptyMessage:
+             'No foreground messages yet. Send a raw, badge, or tile push notification to populate the list.',
+         emptyMessageKey: const ValueKey('empty-foreground-messages-message'),
+         entryKeyPrefix: 'foreground-message-entry',
+         entries: entries,
+       );
+
+  const _EventLogSection.notificationActivations({
+    required List<WnsEventLogEntry> entries,
+  }) : this(
+         title: 'Notification Activations',
+         subtitle:
+             'Toast click, action, and input activations from the live stream.',
+         emptyMessage:
+             'No notification activations yet. Click a toast notification to populate the list.',
+         emptyMessageKey: const ValueKey('empty-activation-events-message'),
+         entryKeyPrefix: 'activation-event-entry',
+         entries: entries,
+       );
+
+  final String title;
+  final String subtitle;
+  final String emptyMessage;
+  final ValueKey<String> emptyMessageKey;
+  final String entryKeyPrefix;
   final List<WnsEventLogEntry> entries;
 
   @override
   Widget build(BuildContext context) {
     return _SectionPanel(
-      title: 'Event Timeline',
-      subtitle:
-          'Push and opened-app events are appended here in newest-first order.',
+      title: title,
+      subtitle: subtitle,
       child: entries.isEmpty
-          ? const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Text(
-                'No lifecycle events yet. Send a push notification or click a notification to populate the list.',
-                key: ValueKey('empty-timeline-message'),
-              ),
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Text(emptyMessage, key: emptyMessageKey),
             )
           : Column(
               children: List<Widget>.generate(
                 entries.length,
                 (index) => Padding(
-                  padding: EdgeInsets.only(bottom: index == entries.length - 1 ? 0 : 12),
+                  padding: EdgeInsets.only(
+                    bottom: index == entries.length - 1 ? 0 : 12,
+                  ),
                   child: _EventLogTile(
-                    key: ValueKey('timeline-entry-$index'),
+                    key: ValueKey('$entryKeyPrefix-$index'),
                     entry: entries[index],
                   ),
                 ),
@@ -432,10 +476,7 @@ class _EventTimelineSection extends StatelessWidget {
 }
 
 class _EventLogTile extends StatelessWidget {
-  const _EventLogTile({
-    super.key,
-    required this.entry,
-  });
+  const _EventLogTile({super.key, required this.entry});
 
   final WnsEventLogEntry entry;
 
@@ -515,10 +556,7 @@ class _EventLogTile extends StatelessWidget {
                       value: _dashIfEmpty(entry.arguments),
                     ),
                     const SizedBox(height: 8),
-                    _InlineMetric(
-                      label: 'Data',
-                      value: _formatMap(entry.data),
-                    ),
+                    _InlineMetric(label: 'Data', value: _formatMap(entry.data)),
                     if (entry.userInput.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       _InlineMetric(
@@ -660,10 +698,7 @@ class _SummaryTile extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          KeyedSubtree(
-            key: valueKey,
-            child: child,
-          ),
+          KeyedSubtree(key: valueKey, child: child),
         ],
       ),
     );
@@ -695,10 +730,7 @@ class _SelectablePreviewText extends StatelessWidget {
 }
 
 class _InlineMetric extends StatelessWidget {
-  const _InlineMetric({
-    required this.label,
-    required this.value,
-  });
+  const _InlineMetric({required this.label, required this.value});
 
   final String label;
   final String value;
