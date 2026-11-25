@@ -34,6 +34,7 @@ class PartnerCenterWnsAdapter implements WnsPlatformAdapter {
     wnsDebugLog('PartnerCenterWnsAdapter.initialize started');
     return _notificationService.initializePartnerCenter(
       appUserModelId: _options.appUserModelId,
+      suppressForegroundToasts: _options.suppressForegroundToasts,
     );
   }
 

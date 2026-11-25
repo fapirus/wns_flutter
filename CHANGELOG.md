@@ -1,3 +1,19 @@
+## Unreleased
+
+(en)
+
+* Added opt-in `PartnerCenterWnsOptions.suppressForegroundToasts` (default
+  `false`) to suppress cloud toasts while the receiving process owns the
+  foreground window, without changing raw delivery or background cloud toasts.
+* Use standard C++20 coroutines instead of the obsolete MSVC `/await` switch.
+
+(ko)
+
+* `PartnerCenterWnsOptions.suppressForegroundToasts` 옵션(기본값 `false`)을
+  추가했습니다. 수신 프로세스가 foreground 창을 소유할 때만 cloud toast를
+  억제하며 raw 수신 및 background cloud toast 동작은 유지됩니다.
+* 더 이상 지원되지 않는 MSVC `/await` 대신 표준 C++20 코루틴을 사용합니다.
+
 ## 0.0.2
 
 (en)

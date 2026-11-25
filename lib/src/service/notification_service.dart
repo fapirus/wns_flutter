@@ -42,10 +42,15 @@ class NotificationService {
     ),
   );
 
-  Future<void> initializePartnerCenter({String? appUserModelId}) async {
+  Future<void> initializePartnerCenter({
+    String? appUserModelId,
+    bool suppressForegroundToasts = false,
+  }) async {
     try {
       wnsDebugLog('NotificationService.initializePartnerCenter invoke');
-      final arguments = <String, Object?>{};
+      final arguments = <String, Object?>{
+        'suppressForegroundToasts': suppressForegroundToasts,
+      };
       if (appUserModelId != null) {
         arguments['appUserModelId'] = appUserModelId;
       }

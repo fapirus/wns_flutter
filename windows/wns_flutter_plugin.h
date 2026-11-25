@@ -7,6 +7,7 @@
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
 
+#include <atomic>
 #include <deque>
 #include <memory>
 #include <mutex>
@@ -87,6 +88,7 @@ class WnsFlutterPlugin : public flutter::Plugin {
       push_channel_{nullptr};
   winrt::event_token push_received_token_{};
   bool has_push_received_handler_ = false;
+  std::atomic_bool suppress_foreground_toasts_{false};
 };
 
 }  // namespace wns_flutter

@@ -1,4 +1,5 @@
 #include "wns_flutter_plugin.h"
+#include "toast_presentation.h"
 
 #include <appmodel.h>
 #include <windows.h>
@@ -546,6 +547,20 @@ void WnsFlutterPlugin::AttachPushNotificationHandler() {
           if (event_args.NotificationType() ==
               Windows::Networking::PushNotifications::PushNotificationType::
                   Toast) {
+            DWORD foreground_process_id = 0;
+            const HWND foreground_window = ::GetForegroundWindow();
+            if (foreground_window != nullptr &&
+                ::GetWindowThreadProcessId(foreground_window,
+                                           &foreground_process_id) == 0) {
+              LogDebug(L"PushNotificationReceived could not identify the "
+                       L"foreground process; leaving the toast visible");
+            }
+            if (SuppressForegroundToast(
+                    event_args, suppress_foreground_toasts_.load(),
+                    foreground_process_id, ::GetCurrentProcessId())) {
+              LogDebug(L"PushNotificationReceived suppressed foreground toast");
+              return;
+            }
             TrackForegroundToastActivation(event_args.ToastNotification());
             LogDebug(
                 L"PushNotificationReceived skipped foreground toast "
@@ -805,12 +820,36 @@ void WnsFlutterPlugin::HandleMethodCall(
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
   if (method_call.method_name().compare("initialize") == 0) {
     LogDebug(L"HandleMethodCall initialize");
+    bool suppress_foreground_toasts = false;
+    const auto* arguments = method_call.arguments();
+    if (arguments != nullptr &&
+        !std::holds_alternative<std::monostate>(*arguments)) {
+      const auto* options = std::get_if<EncodableMap>(arguments);
+      if (options == nullptr) {
+        LogDebug(L"initialize failed: options must be a map");
+        result->Error("INVALID_ARGUMENT", "Initialization options must be a map.");
+        return;
+      }
+      const auto option =
+          options->find(flutter::EncodableValue("suppressForegroundToasts"));
+      if (option != options->end()) {
+        const auto* enabled = std::get_if<bool>(&option->second);
+        if (enabled == nullptr) {
+          LogDebug(L"initialize failed: suppressForegroundToasts must be a bool");
+          result->Error("INVALID_ARGUMENT",
+                        "suppressForegroundToasts must be a bool.");
+          return;
+        }
+        suppress_foreground_toasts = *enabled;
+      }
+    }
     if (!HasPackageIdentity()) {
       LogDebug(L"initialize failed: no package identity");
       NotPackagedError(std::move(result));
       return;
     }
 
+    suppress_foreground_toasts_.store(suppress_foreground_toasts);
     LogDebug(L"initialize succeeded");
     result->Success();
   } else if (method_call.method_name().compare(

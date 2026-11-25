@@ -95,6 +95,24 @@ Expected result:
 - `actionId` and `userInput` are available when the toast supplied them
 - no toast `WnsMessage` is emitted before user interaction
 
+### Optional Foreground Toast Suppression
+
+1. Initialize the installed app with
+   `PartnerCenterWnsOptions(suppressForegroundToasts: true)`.
+2. Keep the app focused and send a raw update and a cloud toast.
+   The raw event must arrive, with no toast banner or new Notification Center
+   entry. Test with an owned dialog focused as well.
+3. Focus another app and repeat. The toast must display normally and clicking it
+   must still activate the running app.
+4. Repeat with the app minimized, and then closed. Cloud toasts must retain
+   normal Windows handling and activation.
+5. Restart with the default options or `suppressForegroundToasts: false`.
+   Toasts must again retain normal Windows handling even while the app is focused.
+
+Send from another device or use a delayed send when testing the focused case:
+opening the sender's UI on the same machine takes focus away from the test app.
+Existing Notification Center entries are not removed when focus changes.
+
 ## Notification Settings
 
 Validate settings separately from channel registration:
