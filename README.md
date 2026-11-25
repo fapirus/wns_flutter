@@ -128,6 +128,32 @@ Foreground toast pushes are activation-only in this package. Windows may display
 or store the toast, but the SDK does not emit a toast `onMessage` event before
 the user selects or acts on it.
 
+### Suppress Toasts While The App Is Foreground
+
+Foreground toast suppression is opt-in. The default retains normal Windows toast
+presentation:
+
+```dart
+final client = const WnsClientBuilder().create(
+  const PartnerCenterWnsOptions(suppressForegroundToasts: true),
+);
+```
+
+With this option enabled, the native WNS receive callback checks whether the
+foreground window belongs to the receiving process, including its owned dialogs.
+If it does, the callback synchronously cancels the toast before Windows displays
+a banner or adds a new Notification Center entry. Existing entries are not
+removed.
+
+When another app is foreground, the window is minimized, or the process is
+closed, cloud toasts retain normal Windows handling. If foreground ownership
+cannot be determined, the toast is left visible.
+
+Raw, badge, and tile deliveries are unaffected. A suppressed toast does not emit
+an `onMessage` event; keep sending raw updates alongside cloud toasts if the app
+also needs immediate in-app state changes. No backend presence tracking is
+required.
+
 ## Development And Validation
 
 `flutter run -d windows` starts an unpackaged Win32 process. WNS APIs that need

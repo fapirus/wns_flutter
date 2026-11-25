@@ -15,8 +15,6 @@ cmake_policy(VERSION 3.14...3.25)
 # C++/WinRT settings
 set(CMAKE_CXX_STANDARD 20)      # Use C++20 standard
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-add_compile_options(/await)     # Enable coroutine support (required for C++/WinRT)
-add_compile_options(/std:c++20) # Redundant but safe for MSVC
 
 # This value is used when generating builds using this plugin, so it must
 # not be changed
@@ -94,6 +92,7 @@ FetchContent_MakeAvailable(googletest)
 # directly into the test binary rather than using the DLL.
 add_executable(${TEST_RUNNER}
   test/wns_flutter_plugin_test.cpp
+  test/toast_presentation_test.cpp
   ${PLUGIN_SOURCES}
 )
 apply_standard_settings(${TEST_RUNNER})

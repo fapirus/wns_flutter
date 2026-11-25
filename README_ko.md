@@ -128,6 +128,18 @@ foreground toast push는 이 패키지에서 activation-only로 다룹니다. Wi
 표시하거나 알림 센터에 저장할 수는 있지만, 사용자가 선택하거나 액션을 수행하기 전
 SDK가 toast를 `onMessage` 이벤트로 방출하지는 않습니다.
 
+### 앱이 foreground일 때 toast 표시 억제
+
+`PartnerCenterWnsOptions(suppressForegroundToasts: true)`로 설정하면 수신
+프로세스가 foreground 창을 소유할 때 네이티브 WNS 콜백에서 toast를 취소합니다.
+기본값은 `false`이므로 기존 표시 동작은 유지됩니다. 취소된 toast는 배너와
+새 알림 센터 항목을 만들지 않으며 기존 항목은 삭제하지 않습니다.
+
+다른 앱이 foreground이거나 앱이 최소화 또는 종료된 경우에는 Windows가
+cloud toast를 정상 처리합니다. raw, badge, tile 수신에는 영향이 없습니다.
+취소된 toast는 `onMessage` 이벤트를 발생시키지 않으므로 즉시 상태 갱신도
+필요하다면 raw와 toast를 함께 전송하세요.
+
 ## 개발과 검증
 
 `flutter run -d windows`는 unpackaged Win32 프로세스를 실행합니다. package

@@ -40,5 +40,23 @@ TEST(WnsFlutterPlugin, GetInitialMessageReturnsNullWithoutActivation) {
   EXPECT_EQ(success_value, nullptr);
 }
 
+TEST(WnsFlutterPlugin, InitializeRejectsInvalidForegroundToastOption) {
+  WnsFlutterPlugin plugin;
+  flutter::EncodableMap options{
+      {EncodableValue("suppressForegroundToasts"), EncodableValue("true")}};
+  std::string error_code;
+
+  plugin.HandleMethodCall(
+      MethodCall<>("initialize",
+                   std::make_unique<EncodableValue>(std::move(options))),
+      std::make_unique<MethodResultFunctions<>>(
+          nullptr,
+          [&error_code](const std::string& code, const std::string&,
+                        const EncodableValue*) { error_code = code; },
+          nullptr));
+
+  EXPECT_EQ(error_code, "INVALID_ARGUMENT");
+}
+
 }  // namespace test
 }  // namespace wns_flutter

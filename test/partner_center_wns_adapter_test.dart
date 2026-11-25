@@ -26,7 +26,10 @@ void main() {
           });
 
       final adapter = PartnerCenterWnsAdapter(
-        options: const PartnerCenterWnsOptions(appUserModelId: 'app.id'),
+        options: const PartnerCenterWnsOptions(
+          appUserModelId: 'app.id',
+          suppressForegroundToasts: true,
+        ),
         notificationService: NotificationService(
           channel,
           messageStream: const Stream<dynamic>.empty(),
@@ -37,8 +40,35 @@ void main() {
       await adapter.initialize();
 
       expect(invokedCall!.method, 'initialize');
-      expect(invokedCall!.arguments, {'appUserModelId': 'app.id'});
+      expect(invokedCall!.arguments, {
+        'appUserModelId': 'app.id',
+        'suppressForegroundToasts': true,
+      });
     });
+
+    test(
+      'initialize leaves foreground toast suppression disabled by default',
+      () async {
+        MethodCall? invokedCall;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, (call) async {
+              invokedCall = call;
+              return null;
+            });
+
+        final adapter = PartnerCenterWnsAdapter(
+          notificationService: NotificationService(
+            channel,
+            messageStream: const Stream<dynamic>.empty(),
+            messageOpenedAppStream: const Stream<dynamic>.empty(),
+          ),
+        );
+
+        await adapter.initialize();
+
+        expect(invokedCall!.arguments, {'suppressForegroundToasts': false});
+      },
+    );
 
     test('requestChannel maps typed channel result', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
